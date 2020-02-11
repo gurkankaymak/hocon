@@ -111,7 +111,7 @@ func (c *Config) GetBoolean(path string) bool {
 }
 
 func (c *Config) find(path string) ConfigValue {
-	keys := strings.Split(path, ".")
+	keys := strings.Split(path, dotToken)
 	size := len(keys)
 	lastKey := keys[size-1]
 	keysWithoutLast := keys[:size-1]
@@ -173,15 +173,15 @@ func (c *ConfigObject) String() string {
 
 	itemsSize := len(c.items)
 	i := 1
-	fmt.Fprintf(&buffer, "{")
+	fmt.Fprintf(&buffer, objectStartToken)
 	for key, value := range c.items {
-		fmt.Fprint(&buffer, key, ":", value.String())
+		fmt.Fprint(&buffer, key, colonToken, value.String())
 		if i < itemsSize {
 			fmt.Fprint(&buffer, ", ")
 		}
 		i++
 	}
-	fmt.Fprintf(&buffer, "}")
+	fmt.Fprintf(&buffer, objectEndToken)
 
 	return buffer.String()
 }
@@ -204,15 +204,19 @@ func (c *ConfigArray) String() string {
 	}
 
 	var buffer bytes.Buffer
-	fmt.Fprintf(&buffer, "[")
+	fmt.Fprintf(&buffer, arrayStartToken)
 	fmt.Fprintf(&buffer, c.values[0].String())
 	for _, configValue := range c.values[1:] {
-		fmt.Fprintf(&buffer, ",")
+		fmt.Fprintf(&buffer, commaToken)
 		fmt.Fprintf(&buffer, configValue.String())
 	}
-	fmt.Fprintf(&buffer, "]")
+	fmt.Fprintf(&buffer, arrayEndToken)
 
 	return buffer.String()
+}
+
+func (c *ConfigArray) Append(value ConfigValue) {
+	c.values = append(c.values, value)
 }
 
 type ConfigNumber interface {

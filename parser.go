@@ -1,120 +1,236 @@
 package hocon
 
 import (
-	"fmt"
+	"errors"
 	"strconv"
 	"strings"
 	"text/scanner"
 )
 
+//type TokenType string
+
+const (
+	equalsToken      = "="
+	commaToken       = ","
+	colonToken       = ":"
+	dotToken         = "."
+	objectStartToken = "{"
+	objectEndToken   = "}"
+	arrayStartToken  = "["
+	arrayEndToken    = "]"
+	plusEqualsToken  = "+="
+)
+
 var s scanner.Scanner
 
-func Parse(input string) *Config {
+func Parse(input string) (*Config, error) {
 	s.Init(strings.NewReader(input))
 	s.Scan()
-	if s.TokenText() == "[" {
-		configArray := extractConfigArray()
-		fmt.Println("gk =========> configArray:", configArray)
-		return &Config{root:configArray}
+	if s.TokenText() == arrayStartToken {
+		configArray, err := extractConfigArray()
+		if err != nil {
+			return nil, err
+		}
+		return &Config{root:configArray}, nil
 	}
 
-	configObject := extractConfigObject()
-	fmt.Println("gk =========> configObject:", configObject)
-	return &Config{root:configObject}
+	configObject, err := extractConfigObject()
+	if err != nil {
+		return nil, err
+	}
+	return &Config{root:configObject}, nil
 }
 
-func extractConfigObject() *ConfigObject {
+func extractConfigObject() (*ConfigObject, error) {
 	root := map[string]ConfigValue{}
 	parenthesisBalanced := true
 
+	if s.TokenText() == objectStartToken { // skip if current text is "{"
+		parenthesisBalanced = false
+		s.Scan()
+	}
 	for tok := s.Peek(); tok != scanner.EOF; tok = s.Peek()  {
-		if s.TokenText() == "{" {
-			parenthesisBalanced = false
-			s.Scan() // skip if current text is '{'
+		if !parenthesisBalanced && s.TokenText() == objectEndToken {  // skip "}"
+			parenthesisBalanced = true
+			s.Scan()
+			return NewConfigObject(root), nil
 		}
 
-		if s.TokenText() == "," {
-			s.Scan() // skip ','
+		if s.TokenText() == commaToken {
+			s.Scan() // skip ","
 		}
 
 		key := s.TokenText()
 		s.Scan()
 		text := s.TokenText()
 
-		if text == "." {
-			s.Scan() // skip '.'
-			configObject := extractConfigObject()
-			if !parenthesisBalanced && s.TokenText() == "}" {
+		if text == dotToken {
+			s.Scan() // skip "."
+			configObject, err := extractConfigObject()
+			if err != nil {
+				return nil, err
+			}
+			if !parenthesisBalanced && s.TokenText() == objectEndToken {
 				parenthesisBalanced = true
 				s.Scan()
 			}
-			return NewConfigObject(map[string]ConfigValue{key:configObject})
+
+			if !parenthesisBalanced {
+				return nil, errors.New("invalid config object, parenthesis does not match")
+			}
+			return NewConfigObject(map[string]ConfigValue{key:configObject}), nil
 		}
 
-		if text == "=" || text == ":" { // skip '=' or ':'
-			s.Scan()
-		}
-		configValue := extractConfigValue()
-		root[key] = configValue
+		switch checkSeparator(text) {
+		case equalsToken, colonToken:
+			configValue, err := extractConfigValue()
+			if err != nil {
+				return nil, err
+			}
 
-		if !parenthesisBalanced && s.Peek() == '}' {  // skip '}'
+			if configObject, ok := configValue.(*ConfigObject); ok {
+				if existingConfigObject, ok := root[key].(*ConfigObject); ok {
+					mergedObject := mergeConfigObjects(existingConfigObject, configObject)
+					configValue = mergedObject
+				}
+			}
+			root[key] = configValue
+		case plusEqualsToken:
+			existing, ok := root[key]
+			if !ok {
+				configValue, err := extractConfigValue()
+				if err != nil {
+					return nil, err
+				}
+				root[key] = NewConfigArray([]ConfigValue{configValue})
+			} else {
+				existingArray, ok := existing.(*ConfigArray)
+				if !ok {
+					return nil, errors.New("value of the key: " + key + " is not an array")
+				}
+				configValue, err := extractConfigValue()
+				if err != nil {
+					return nil, err
+				}
+				existingArray.Append(configValue)
+			}
+		}
+
+		if !parenthesisBalanced && s.TokenText() == objectEndToken {  // skip "}"
 			parenthesisBalanced = true
-			s.Scan()
 			s.Scan()
 		}
 
 		if parenthesisBalanced {
-			return NewConfigObject(root)
+			return NewConfigObject(root), nil
 		}
 	}
-	return NewConfigObject(root)
+
+	if !parenthesisBalanced {
+		return nil, errors.New("invalid config object, parenthesis does not match")
+	}
+	return NewConfigObject(root), nil
 }
 
-func extractConfigArray() *ConfigArray {
-	var values []ConfigValue
-	for tok := s.Peek(); tok != ']' && tok != scanner.EOF; tok = s.Peek() {
-		s.Scan()
-		if s.TokenText() == "[" {
-			s.Scan() // skip // '['
+func mergeConfigObjects(existing, new *ConfigObject) *ConfigObject {
+	// TODO gk: refactor nested if statements
+	for key, value := range new.items {
+		existingValue, ok := existing.items[key]
+		if ok {
+			existingObject, ok := existingValue.(*ConfigObject)
+			if ok {
+				newObject, ok := value.(*ConfigObject)
+				if ok {
+					mergedObject := mergeConfigObjects(existingObject, newObject)
+					value = mergedObject
+				}
+			}
 		}
-		configValue := extractConfigValue()
+		existing.items[key] = value
+	}
+	return existing
+}
+
+func checkSeparator(token string) string {
+	switch token {
+	case equalsToken, colonToken:
+		s.Scan()
+		return equalsToken
+	case "+":
+		if s.Peek() == '=' {
+			s.Scan()
+			s.Scan()
+			return plusEqualsToken
+		}
+		return ""
+	default:
+		return ""
+	}
+}
+
+func extractConfigArray() (*ConfigArray, error) {
+	var values []ConfigValue
+	if s.TokenText() != arrayStartToken {
+		return nil, errors.New("invalid config array")
+	}
+	parenthesisBalanced := false
+	s.Scan() // skip "["
+	if s.TokenText() == arrayEndToken { // empty array
+		s.Scan()
+		return NewConfigArray(values), nil
+	}
+	for tok := s.Peek() ; tok != scanner.EOF; tok = s.Peek() {
+		configValue, err := extractConfigValue()
+		if err != nil {
+			return nil, err
+		}
 		if configValue != nil {
 			values = append(values, configValue)
 		}
-		if s.Peek() == ',' {
+		if s.TokenText() == commaToken {
 			s.Scan() // skip comma
 		}
+
+		if !parenthesisBalanced && s.TokenText() == arrayEndToken {  // skip "]"
+			parenthesisBalanced = true
+			s.Scan()
+			return NewConfigArray(values), nil
+		}
 	}
-	if s.Peek() == ']' {  // skip ']'
-		s.Scan()
-		s.Scan()
+	if parenthesisBalanced {
+		return NewConfigArray(values), nil
 	}
-	return NewConfigArray(values)
+	return nil, errors.New("invalid config array, parenthesis does not match")
 }
 
-func extractConfigValue() ConfigValue {
+func extractConfigValue() (ConfigValue, error) {
 	// TODO gk: int, float32, bool cases parse two times
 	token := s.TokenText()
 	switch {
 	case isTokenString(token):
-		return NewConfigString(strings.ReplaceAll(token, "\"", ""))
+		s.Scan() // advance the scanner to next token after extracting the value
+		return NewConfigString(strings.ReplaceAll(token, "\"", "")), nil
 	case isTokenObject(token):
 		return extractConfigObject()
 	case isTokenArray(token):
 		return extractConfigArray()
 	case isTokenInt(token):
 		value, _ := strconv.Atoi(token)
-		return NewConfigInt(value)
+		s.Scan() // advance the scanner to next token after extracting the value
+		return NewConfigInt(value), nil
 	case isTokenFloat32(token):
 		value, _ := strconv.ParseFloat(token, 32)
-		return NewConfigFloat32(float32(value))
+		s.Scan() // advance the scanner to next token after extracting the value
+		return NewConfigFloat32(float32(value)), nil
 	case isTokenBoolean(token):
 		value, _ := strconv.ParseBool(token)
-		return NewConfigBoolean(value)
+		s.Scan() // advance the scanner to next token after extracting the value
+		return NewConfigBoolean(value), nil
 	case isTokenBooleanString(token):
-		return NewConfigBooleanFromString(token)
+		s.Scan() // advance the scanner to next token after extracting the value
+		return NewConfigBooleanFromString(token), nil
 	}
-	return nil
+	return nil, errors.New("unknown config value: " + token)
 }
 
 func isTokenString(token string) bool {
@@ -122,11 +238,11 @@ func isTokenString(token string) bool {
 }
 
 func isTokenObject(token string) bool {
-	return strings.HasPrefix(token, "{")
+	return strings.HasPrefix(token, objectStartToken)
 }
 
 func isTokenArray(token string) bool {
-	return strings.HasPrefix(token, "[")
+	return strings.HasPrefix(token, arrayStartToken)
 }
 
 func isTokenInt(token string) bool {

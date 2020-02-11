@@ -5,7 +5,7 @@ import (
 )
 
 func TestGetConfigObject(t *testing.T) {
-	config := Parse(`{a:{b:"c"}, d:[]}`)
+	config, _ := Parse(`{a:{b:"c"}, d:[]}`)
 
 	t.Run("get config object", func(t *testing.T) {
 		got := config.GetConfigObject("a")
@@ -25,7 +25,7 @@ func TestGetConfigObject(t *testing.T) {
 }
 
 func TestGetConfigArray(t *testing.T) {
-	config := Parse(`{a: [1, 2], b: {c: "d"}}`)
+	config, _ := Parse(`{a: [1, 2], b: {c: "d"}}`)
 
 	t.Run("get config array", func(t *testing.T) {
 		got := config.GetConfigArray("a")
@@ -45,7 +45,7 @@ func TestGetConfigArray(t *testing.T) {
 }
 
 func TestGetString(t *testing.T) {
-	config := Parse(`{a: "b", c: 2}`)
+	config, _ := Parse(`{a: "b", c: 2}`)
 
 	t.Run("get string", func(t *testing.T) {
 		assertEquals(config.GetString("a"), "b", t)
@@ -61,7 +61,7 @@ func TestGetString(t *testing.T) {
 }
 
 func TestGetInt(t *testing.T) {
-	config := Parse(`{a: "aa", b: "3", c: 2, d: [5]}`)
+	config, _ := Parse(`{a: "aa", b: "3", c: 2, d: [5]}`)
 
 	t.Run("get int", func(t *testing.T) {
 		assertEquals(config.GetInt("c"), 2, t)
@@ -85,7 +85,7 @@ func TestGetInt(t *testing.T) {
 }
 
 func TestGetFloat32(t *testing.T) {
-	config := Parse(`{a: "aa", b: "3.2", c: 2.4, d: [5]}`)
+	config, _ := Parse(`{a: "aa", b: "3.2", c: 2.4, d: [5]}`)
 
 	t.Run("get float32", func(t *testing.T) {
 		assertEquals(config.GetFloat32("c"), float32(2.4), t)
@@ -109,7 +109,7 @@ func TestGetFloat32(t *testing.T) {
 }
 
 func TestGetBoolean(t *testing.T) {
-	config := Parse(`{a: true, b: yes, c: on, d: false, e: no, f: off, g: "true", h: "yes", i: "on", j: "false", k: "no", l: "off", m: "aa", n: [5]}`)
+	config, _ := Parse(`{a: true, b: yes, c: on, d: false, e: no, f: off, g: "true", h: "yes", i: "on", j: "false", k: "no", l: "off", m: "aa", n: [5]}`)
 
 	t.Run("return zero value(false) for a non-existing boolean", func(t *testing.T) {
 		assertEquals(config.GetBoolean("z"), false, t)

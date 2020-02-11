@@ -38,7 +38,7 @@ func TestParse(t *testing.T) {
 
 func checkParseResult(configStr, expected string, t *testing.T) {
 	t.Helper()
-	got := Parse(configStr)
+	got, _ := Parse(configStr) // TODO gk: refactor this to be able to check errors
 	if got.String() != expected {
 		t.Errorf("expected: %s, got: %s", expected, got)
 	}
