@@ -1,8 +1,6 @@
 package hocon
 
-import (
-	"testing"
-)
+import "testing"
 
 func TestGetConfigObject(t *testing.T) {
 	config, _ := Parse(`{a:{b:"c"}, d:[]}`)
@@ -145,40 +143,5 @@ func TestGetBoolean(t *testing.T) {
 		t.Run(tc.path, func(t *testing.T) {
 			assertEquals(config.GetBoolean(tc.path), tc.expected, t)
 		})
-	}
-}
-
-func assertEquals(got, expected interface{}, t *testing.T) {
-	t.Helper()
-	if got != expected {
-		t.Errorf("expected: %q, got: %q", expected, got)
-	}
-}
-
-func assertPanic(fn func(), t *testing.T, expectedMessage ...string) {
-	t.Helper()
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Fatalf("expected a panic, but did not get any!")
-		}
-		switch recovered := r.(type) {
-		case string:
-			if len(expectedMessage) > 0 && recovered != expectedMessage[0] {
-				t.Errorf("wrong panic received! expected: %s, got: %s", expectedMessage, recovered)
-			}
-		case error:
-			if messageGot := recovered.Error(); len(expectedMessage) > 0 && messageGot != expectedMessage[0] {
-				t.Errorf("wrong panic received! expected: %s, got: %s", expectedMessage, messageGot)
-			}
-		}
-	}()
-	fn()
-}
-
-func assertConfigEquals(got ConfigValue, expected string, t *testing.T) {
-	t.Helper()
-	if got.String() != expected {
-		t.Errorf("expected: %s, got: %s", expected, got)
 	}
 }

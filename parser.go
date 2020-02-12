@@ -133,18 +133,11 @@ func extractConfigObject() (*ConfigObject, error) {
 }
 
 func mergeConfigObjects(existing, new *ConfigObject) *ConfigObject {
-	// TODO gk: refactor nested if statements
 	for key, value := range new.items {
 		existingValue, ok := existing.items[key]
-		if ok {
-			existingObject, ok := existingValue.(*ConfigObject)
-			if ok {
-				newObject, ok := value.(*ConfigObject)
-				if ok {
-					mergedObject := mergeConfigObjects(existingObject, newObject)
-					value = mergedObject
-				}
-			}
+		if ok && existingValue.ValueType() == ValueTypeObject && value.ValueType() == ValueTypeObject {
+			mergedObject := mergeConfigObjects(existingValue.(*ConfigObject), value.(*ConfigObject))
+			value = mergedObject
 		}
 		existing.items[key] = value
 	}

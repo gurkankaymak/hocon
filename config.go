@@ -9,7 +9,7 @@ import (
 
 type ValueType int
 
-const ( // TODO gk: may not be required
+const (
 	ValueTypeObject ValueType = iota
 	ValueTypeString
 	ValueTypeList
