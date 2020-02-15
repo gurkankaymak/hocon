@@ -337,17 +337,9 @@ func extractSubstitution() (*Substitution, error) {
 	return &Substitution{path: substitutionPath, optional:optional}, nil
 }
 
-func isTokenString(token string) bool {
-	return strings.HasPrefix(token, `"`)
-}
-
-func isConfigObject(token string) bool {
-	return strings.HasPrefix(token, objectStartToken)
-}
-
-func isConfigArray(token string) bool {
-	return strings.HasPrefix(token, arrayStartToken)
-}
+func isTokenString(token string) bool  { return strings.HasPrefix(token, `"`) }
+func isConfigObject(token string) bool { return token == objectStartToken }
+func isConfigArray(token string) bool  { return token == arrayStartToken }
 
 func isTokenInt(token string) bool {
 	_, err := strconv.Atoi(token)

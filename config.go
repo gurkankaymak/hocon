@@ -21,9 +21,7 @@ type Config struct {
 	root ConfigValue
 }
 
-func (c *Config) String() string {
-	return c.root.String()
-}
+func (c *Config) String() string { return c.root.String() }
 
 func (c *Config) GetConfigObject(path string) *ConfigObject {
 	configValue := c.find(path)
@@ -126,33 +124,21 @@ type ConfigString struct {
 	value string
 }
 
-func NewConfigString(value string) *ConfigString {
-	return &ConfigString{value: value}
-}
+func NewConfigString(value string) *ConfigString { return &ConfigString{value: value} }
 
-func (c *ConfigString) ValueType() ValueType {
-	return ValueTypeString
-}
+func (c *ConfigString) ValueType() ValueType { return ValueTypeString }
 
-func (c *ConfigString) String() string {
-	return c.value
-}
+func (c *ConfigString) String() string { return c.value }
 
 type ConfigObject struct {
 	items map[string]ConfigValue
 }
 
-func NewConfigObject(items map[string]ConfigValue) *ConfigObject {
-	return &ConfigObject{items: items}
-}
+func NewConfigObject(items map[string]ConfigValue) *ConfigObject { return &ConfigObject{items: items} }
 
-func (c *ConfigObject) ValueType() ValueType {
-	return ValueTypeObject
-}
+func (c *ConfigObject) ValueType() ValueType { return ValueTypeObject }
 
-func (c *ConfigObject) Get(key string) ConfigValue {
-	return c.items[key]
-}
+func (c *ConfigObject) Get(key string) ConfigValue { return c.items[key] }
 
 func (c *ConfigObject) String() string {
 	var builder strings.Builder
@@ -194,13 +180,9 @@ type ConfigArray struct {
 	values []ConfigValue
 }
 
-func NewConfigArray(values []ConfigValue) *ConfigArray {
-	return &ConfigArray{values: values}
-}
+func NewConfigArray(values []ConfigValue) *ConfigArray { return &ConfigArray{values: values} }
 
-func (c *ConfigArray) ValueType() ValueType {
-	return ValueTypeArray
-}
+func (c *ConfigArray) ValueType() ValueType { return ValueTypeArray }
 
 func (c *ConfigArray) String() string {
 	if len(c.values) == 0 {
@@ -232,29 +214,19 @@ type ConfigInt struct {
 	value int
 }
 
-func NewConfigInt(value int) *ConfigInt {
-	return &ConfigInt{value: value}
-}
+func NewConfigInt(value int) *ConfigInt { return &ConfigInt{value: value} }
 
-func (c *ConfigInt) ValueType() ValueType {
-	return ValueTypeNumber
-}
+func (c *ConfigInt) ValueType() ValueType { return ValueTypeNumber }
 
-func (c *ConfigInt) String() string {
-	return strconv.Itoa(c.value)
-}
+func (c *ConfigInt) String() string { return strconv.Itoa(c.value) }
 
 type ConfigFloat32 struct {
 	value float32
 }
 
-func NewConfigFloat32(value float32) *ConfigFloat32 {
-	return &ConfigFloat32{value: value}
-}
+func NewConfigFloat32(value float32) *ConfigFloat32 { return &ConfigFloat32{value: value} }
 
-func (c *ConfigFloat32) ValueType() ValueType {
-	return ValueTypeNumber
-}
+func (c *ConfigFloat32) ValueType() ValueType { return ValueTypeNumber }
 
 func (c *ConfigFloat32) String() string {
 	return strconv.FormatFloat(float64(c.value), 'e', -1, 32)
@@ -264,9 +236,7 @@ type ConfigBoolean struct {
 	value bool
 }
 
-func NewConfigBoolean(value bool) *ConfigBoolean {
-	return &ConfigBoolean{value: value}
-}
+func NewConfigBoolean(value bool) *ConfigBoolean { return &ConfigBoolean{value: value} }
 
 func NewConfigBooleanFromString(value string) *ConfigBoolean {
 	switch value {
@@ -279,22 +249,16 @@ func NewConfigBooleanFromString(value string) *ConfigBoolean {
 	}
 }
 
-func (c *ConfigBoolean) ValueType() ValueType {
-	return ValueTypeBoolean
-}
+func (c *ConfigBoolean) ValueType() ValueType { return ValueTypeBoolean }
 
-func (c *ConfigBoolean) String() string {
-	return strconv.FormatBool(c.value)
-}
+func (c *ConfigBoolean) String() string { return strconv.FormatBool(c.value) }
 
 type Substitution struct {
 	path     string
 	optional bool
 }
 
-func (s *Substitution) ValueType() ValueType {
-	return ValueTypeSubstitution
-}
+func (s *Substitution) ValueType() ValueType { return ValueTypeSubstitution }
 
 func (s *Substitution) String() string {
 	var builder strings.Builder
