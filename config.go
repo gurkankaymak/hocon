@@ -1,8 +1,6 @@
 package hocon
 
 import (
-	"bytes"
-	"fmt"
 	"strconv"
 	"strings"
 )
@@ -12,10 +10,11 @@ type ValueType int
 const (
 	ValueTypeObject ValueType = iota
 	ValueTypeString
-	ValueTypeList
+	ValueTypeArray
 	ValueTypeNumber
 	ValueTypeBoolean
 	ValueTypeNull
+	ValueTypeSubstitution
 )
 
 type Config struct {
@@ -111,24 +110,11 @@ func (c *Config) GetBoolean(path string) bool {
 }
 
 func (c *Config) find(path string) ConfigValue {
-	keys := strings.Split(path, dotToken)
-	size := len(keys)
-	lastKey := keys[size-1]
-	keysWithoutLast := keys[:size-1]
-	switch config := c.root.(type) {
-	case *ConfigObject:
-		configObject := config
-		for _, key := range keysWithoutLast {
-			value, ok := configObject.items[key]
-			if !ok {
-				return nil
-			}
-			configObject = value.(*ConfigObject)
-		}
-		return configObject.items[lastKey]
-	default:
+	if c.root.ValueType() != ValueTypeObject {
 		return nil
 	}
+	return c.root.(*ConfigObject).find(path)
+
 }
 
 type ConfigValue interface {
@@ -169,21 +155,39 @@ func (c *ConfigObject) Get(key string) ConfigValue {
 }
 
 func (c *ConfigObject) String() string {
-	var buffer bytes.Buffer
+	var builder strings.Builder
 
 	itemsSize := len(c.items)
 	i := 1
-	fmt.Fprintf(&buffer, objectStartToken)
+	builder.WriteString(objectStartToken)
 	for key, value := range c.items {
-		fmt.Fprint(&buffer, key, colonToken, value.String())
+		builder.WriteString(key)
+		builder.WriteString(colonToken)
+		builder.WriteString(value.String())
 		if i < itemsSize {
-			fmt.Fprint(&buffer, ", ")
+			builder.WriteString(", ")
 		}
 		i++
 	}
-	fmt.Fprintf(&buffer, objectEndToken)
+	builder.WriteString(objectEndToken)
 
-	return buffer.String()
+	return builder.String()
+}
+
+func (c *ConfigObject) find(path string) ConfigValue {
+	keys := strings.Split(path, dotToken)
+	size := len(keys)
+	lastKey := keys[size-1]
+	keysWithoutLast := keys[:size-1]
+	configObject := c
+	for _, key := range keysWithoutLast {
+		value, ok := configObject.items[key]
+		if !ok {
+			return nil
+		}
+		configObject = value.(*ConfigObject)
+	}
+	return configObject.items[lastKey]
 }
 
 type ConfigArray struct {
@@ -195,7 +199,7 @@ func NewConfigArray(values []ConfigValue) *ConfigArray {
 }
 
 func (c *ConfigArray) ValueType() ValueType {
-	return ValueTypeList
+	return ValueTypeArray
 }
 
 func (c *ConfigArray) String() string {
@@ -203,16 +207,16 @@ func (c *ConfigArray) String() string {
 		return "[]"
 	}
 
-	var buffer bytes.Buffer
-	fmt.Fprintf(&buffer, arrayStartToken)
-	fmt.Fprintf(&buffer, c.values[0].String())
+	var builder strings.Builder
+	builder.WriteString(arrayStartToken)
+	builder.WriteString(c.values[0].String())
 	for _, configValue := range c.values[1:] {
-		fmt.Fprintf(&buffer, commaToken)
-		fmt.Fprintf(&buffer, configValue.String())
+		builder.WriteString(commaToken)
+		builder.WriteString(configValue.String())
 	}
-	fmt.Fprintf(&buffer, arrayEndToken)
+	builder.WriteString(arrayEndToken)
 
-	return buffer.String()
+	return builder.String()
 }
 
 func (c *ConfigArray) Append(value ConfigValue) {
@@ -245,7 +249,7 @@ type ConfigFloat32 struct {
 }
 
 func NewConfigFloat32(value float32) *ConfigFloat32 {
-	return &ConfigFloat32{value:value}
+	return &ConfigFloat32{value: value}
 }
 
 func (c *ConfigFloat32) ValueType() ValueType {
@@ -267,9 +271,9 @@ func NewConfigBoolean(value bool) *ConfigBoolean {
 func NewConfigBooleanFromString(value string) *ConfigBoolean {
 	switch value {
 	case "true", "yes", "on":
-		return &ConfigBoolean{value:true}
+		return &ConfigBoolean{value: true}
 	case "false", "no", "off":
-		return &ConfigBoolean{value:false}
+		return &ConfigBoolean{value: false}
 	default:
 		panic("cannot parse value: " + value + " to boolean!")
 	}
@@ -281,4 +285,24 @@ func (c *ConfigBoolean) ValueType() ValueType {
 
 func (c *ConfigBoolean) String() string {
 	return strconv.FormatBool(c.value)
+}
+
+type Substitution struct {
+	path     string
+	optional bool
+}
+
+func (s *Substitution) ValueType() ValueType {
+	return ValueTypeSubstitution
+}
+
+func (s *Substitution) String() string {
+	var builder strings.Builder
+	builder.WriteString("${")
+	if s.optional {
+		builder.WriteString("?")
+	}
+	builder.WriteString(s.path)
+	builder.WriteString("}")
+	return builder.String()
 }
