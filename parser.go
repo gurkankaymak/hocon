@@ -46,13 +46,12 @@ func Parse(input string) (*Config, error) {
 	return &Config{root:configObject}, nil
 }
 
-// TODO gk: rename configValueOpt
-func resolveSubstitutions(root *ConfigObject, configValueOpt ...ConfigValue) error {
+func resolveSubstitutions(root *ConfigObject, configValueOptional ...ConfigValue) error {
 	var configValue ConfigValue
-	if configValueOpt == nil {
+	if configValueOptional == nil {
 		configValue = root
 	} else {
-		configValue = configValueOpt[0]
+		configValue = configValueOptional[0]
 	}
 
 	switch v := configValue.(type) {
@@ -70,11 +69,12 @@ func resolveSubstitutions(root *ConfigObject, configValueOpt ...ConfigValue) err
 				return err
 			}
 		}
+	default:
+		return errors.New("invalid type for substitution, substitutions are only allowed in field values and array elements")
 	}
 	return nil
 }
 
-// TODO gk: rename function
 func processSubstitution(root *ConfigObject, value ConfigValue, resolveFunc func(configValue ConfigValue)) error {
 	if value.ValueType() == ValueTypeSubstitution {
 		substitution := value.(*Substitution)
