@@ -2,6 +2,7 @@ package hocon
 
 import (
 	"errors"
+	"os"
 	"strconv"
 	"strings"
 	"text/scanner"
@@ -22,20 +23,37 @@ const (
 	plusEqualsToken  = "+="
 )
 
-var s scanner.Scanner
+type Parser struct {
+	s scanner.Scanner
+}
 
-func Parse(input string) (*Config, error) {
-	s.Init(strings.NewReader(input))
-	s.Scan()
-	if s.TokenText() == arrayStartToken {
-		configArray, err := extractConfigArray()
+var parser Parser
+
+func ParseString(input string) (*Config, error) {
+	parser.s.Init(strings.NewReader(input))
+	return parser.parse()
+}
+
+func ParseFile(path string) (*Config, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err // TODO gk: return custom error (wrapped err could be returned)
+	}
+	parser.s.Init(file)
+	return parser.parse()
+}
+
+func (p *Parser) parse() (*Config, error) {
+	p.s.Scan()
+	if p.s.TokenText() == arrayStartToken {
+		configArray, err := p.extractConfigArray()
 		if err != nil {
 			return nil, err
 		}
 		return &Config{root:configArray}, nil
 	}
 
-	configObject, err := extractConfigObject()
+	configObject, err := p.extractConfigObject()
 	if err != nil {
 		return nil, err
 	}
@@ -93,59 +111,75 @@ func processSubstitution(root *ConfigObject, value ConfigValue, resolveFunc func
 	return nil
 }
 
-func extractConfigObject() (*ConfigObject, error) {
+/*// TODO gk: move method
+func parseIncludedFile(path string) (*ConfigObject, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err // TODO gk: return custom error (wrapped err could be returned)
+	}
+	includeScanner.Init(file)
+	return extractConfigObject()
+}*/
+
+func (p *Parser) extractConfigObject() (*ConfigObject, error) {
 	root := map[string]ConfigValue{}
 	parenthesisBalanced := true
 
-	if s.TokenText() == objectStartToken { // skip if current text is "{"
+	if p.s.TokenText() == objectStartToken { // skip if current text is "{"
 		parenthesisBalanced = false
-		s.Scan()
+		p.s.Scan()
 	}
-	for tok := s.Peek(); tok != scanner.EOF; tok = s.Peek() {
-		if !parenthesisBalanced && s.TokenText() == objectEndToken {  // skip "}"
+	for tok := p.s.Peek(); tok != scanner.EOF; tok = p.s.Peek() {
+		if !parenthesisBalanced && p.s.TokenText() == objectEndToken {  // skip "}"
 			parenthesisBalanced = true
-			s.Scan()
+			p.s.Scan()
 			return NewConfigObject(root), nil
 		}
 
-		if s.TokenText() == commaToken {
-			s.Scan() // skip ","
+		if p.s.TokenText() == commaToken {
+			p.s.Scan() // skip ","
 		}
 
-		key := s.TokenText()
+		/*if p.s.TokenText() == "include" {
+			p.s.Scan()
+			// TODO gk: perform validations for include value
+			parseIncludedFile(p.s.TokenText())
+		}*/
+
+		key := p.s.TokenText()
 		if key == dotToken {
-			return nil, errors.New(`invalid path, leading period '.' (use quoted "" empty string if you want an empty element)`)
+			return nil, leadingPeriodError(p.s.Position.Line, p.s.Position.Column)
 		}
-		s.Scan()
-		text := s.TokenText()
+		p.s.Scan()
+		text := p.s.TokenText()
 
 		if text == dotToken {
-			s.Scan() // skip "."
-			if s.TokenText() == dotToken {
-				return nil, errors.New(`invalid path, two adjacent periods '.' (use quoted "" empty string if you want an empty element)`)
+			p.s.Scan() // skip "."
+			if p.s.TokenText() == dotToken {
+				return nil, adjacentPeriodsError(p.s.Position.Line, p.s.Position.Column)
 			}
-			if checkSeparator(s.TokenText()) != "" {
-				return nil, errors.New(`invalid path, trailing period '.' (use quoted "" empty string if you want an empty element)`)
+			if p.parseSeparator(p.s.TokenText()) != "" {
+				return nil, trailingPeriodError(p.s.Position.Line, p.s.Position.Column)
 			}
-			configObject, err := extractConfigObject()
+			configObject, err := p.extractConfigObject()
 			if err != nil {
 				return nil, err
 			}
 
-			if !parenthesisBalanced && s.TokenText() == objectEndToken {
+			if !parenthesisBalanced && p.s.TokenText() == objectEndToken {
 				parenthesisBalanced = true
-				s.Scan()
+				p.s.Scan()
 			}
 
 			if !parenthesisBalanced {
-				return nil, errors.New("invalid config object, parenthesis does not match")
+				return nil, invalidConfigObject("parenthesis do not match", p.s.Position.Line, p.s.Position.Column)
 			}
 			return NewConfigObject(map[string]ConfigValue{key:configObject}), nil
 		}
 
-		switch checkSeparator(text) {
+		switch p.parseSeparator(text) {
 		case equalsToken, colonToken:
-			configValue, err := extractConfigValue()
+			configValue, err := p.extractConfigValue()
 			if err != nil {
 				return nil, err
 			}
@@ -160,7 +194,7 @@ func extractConfigObject() (*ConfigObject, error) {
 		case plusEqualsToken:
 			existing, ok := root[key]
 			if !ok {
-				configValue, err := extractConfigValue()
+				configValue, err := p.extractConfigValue()
 				if err != nil {
 					return nil, err
 				}
@@ -170,7 +204,7 @@ func extractConfigObject() (*ConfigObject, error) {
 				if !ok {
 					return nil, errors.New("value of the key: " + key + " is not an array")
 				}
-				configValue, err := extractConfigValue()
+				configValue, err := p.extractConfigValue()
 				if err != nil {
 					return nil, err
 				}
@@ -178,9 +212,9 @@ func extractConfigObject() (*ConfigObject, error) {
 			}
 		}
 
-		if !parenthesisBalanced && s.TokenText() == objectEndToken {  // skip "}"
+		if !parenthesisBalanced && p.s.TokenText() == objectEndToken {  // skip "}"
 			parenthesisBalanced = true
-			s.Scan()
+			p.s.Scan()
 		}
 
 		if parenthesisBalanced {
@@ -189,7 +223,7 @@ func extractConfigObject() (*ConfigObject, error) {
 	}
 
 	if !parenthesisBalanced {
-		return nil, errors.New("invalid config object, parenthesis does not match")
+		return nil, invalidConfigObject("parenthesis do not match", p.s.Position.Line, p.s.Position.Column)
 	}
 	return NewConfigObject(root), nil
 }
@@ -206,15 +240,15 @@ func mergeConfigObjects(existing, new *ConfigObject) *ConfigObject {
 	return existing
 }
 
-func checkSeparator(token string) string {
+func (p *Parser) parseSeparator(token string) string {
 	switch token {
 	case equalsToken, colonToken:
-		s.Scan()
+		p.s.Scan()
 		return equalsToken
 	case "+":
-		if s.Peek() == '=' {
-			s.Scan()
-			s.Scan()
+		if p.s.Peek() == '=' {
+			p.s.Scan()
+			p.s.Scan()
 			return plusEqualsToken
 		}
 		return ""
@@ -223,96 +257,96 @@ func checkSeparator(token string) string {
 	}
 }
 
-func extractConfigArray() (*ConfigArray, error) {
+func (p *Parser) extractConfigArray() (*ConfigArray, error) {
 	var values []ConfigValue
-	if s.TokenText() != arrayStartToken {
-		return nil, errors.New("invalid config array")
+	if p.s.TokenText() != arrayStartToken {
+		return nil, invalidConfigArray("not an array start token", p.s.Position.Line, p.s.Position.Column)
 	}
 	parenthesisBalanced := false
-	s.Scan() // skip "["
-	if s.TokenText() == arrayEndToken { // empty array
-		s.Scan()
+	p.s.Scan() // skip "["
+	if p.s.TokenText() == arrayEndToken { // empty array
+		p.s.Scan()
 		return NewConfigArray(values), nil
 	}
-	for tok := s.Peek() ; tok != scanner.EOF; tok = s.Peek() {
-		configValue, err := extractConfigValue()
+	for tok := p.s.Peek() ; tok != scanner.EOF; tok = p.s.Peek() {
+		configValue, err := p.extractConfigValue()
 		if err != nil {
 			return nil, err
 		}
 		if configValue != nil {
 			values = append(values, configValue)
 		}
-		if s.TokenText() == commaToken {
-			s.Scan() // skip comma
+		if p.s.TokenText() == commaToken {
+			p.s.Scan() // skip comma
 		}
 
-		if !parenthesisBalanced && s.TokenText() == arrayEndToken {  // skip "]"
+		if !parenthesisBalanced && p.s.TokenText() == arrayEndToken {  // skip "]"
 			parenthesisBalanced = true
-			s.Scan()
+			p.s.Scan()
 			return NewConfigArray(values), nil
 		}
 	}
 	if parenthesisBalanced {
 		return NewConfigArray(values), nil
 	}
-	return nil, errors.New("invalid config array, parenthesis does not match")
+	return nil, invalidConfigArray("parenthesis does not match", p.s.Position.Line, p.s.Position.Column)
 }
 
-func extractConfigValue() (ConfigValue, error) {
+func (p *Parser) extractConfigValue() (ConfigValue, error) {
 	// TODO gk: int, float32, bool cases parse two times
-	token := s.TokenText()
+	token := p.s.TokenText()
 	switch {
 	case isTokenString(token):
-		s.Scan() // advance the scanner to next token after extracting the value
+		p.s.Scan() // advance the scanner to next token after extracting the value
 		return NewConfigString(strings.ReplaceAll(token, "\"", "")), nil
 	case isConfigObject(token):
-		return extractConfigObject()
+		return p.extractConfigObject()
 	case isConfigArray(token):
-		return extractConfigArray()
+		return p.extractConfigArray()
 	case isTokenInt(token):
 		value, _ := strconv.Atoi(token)
-		s.Scan() // advance the scanner to next token after extracting the value
+		p.s.Scan() // advance the scanner to next token after extracting the value
 		return NewConfigInt(value), nil
 	case isTokenFloat32(token):
 		value, _ := strconv.ParseFloat(token, 32)
-		s.Scan() // advance the scanner to next token after extracting the value
+		p.s.Scan() // advance the scanner to next token after extracting the value
 		return NewConfigFloat32(float32(value)), nil
 	case isTokenBoolean(token):
 		value, _ := strconv.ParseBool(token)
-		s.Scan() // advance the scanner to next token after extracting the value
+		p.s.Scan() // advance the scanner to next token after extracting the value
 		return NewConfigBoolean(value), nil
 	case isTokenBooleanString(token):
-		s.Scan() // advance the scanner to next token after extracting the value
+		p.s.Scan() // advance the scanner to next token after extracting the value
 		return NewConfigBooleanFromString(token), nil
-	case isSubstitution(token):
-		return extractSubstitution()
+	case isSubstitution(token, p.s.Peek()):
+		return p.extractSubstitution()
 	}
 	return nil, errors.New("unknown config value: " + token)
 }
 
-func extractSubstitution() (*Substitution, error) {
-	s.Scan() // skip "$"
-	s.Scan() // skip "{"
+func (p *Parser) extractSubstitution() (*Substitution, error) {
+	p.s.Scan() // skip "$"
+	p.s.Scan() // skip "{"
 	optional := false
-	if s.TokenText() == "?" {
+	if p.s.TokenText() == "?" {
 		optional = true
-		s.Scan()
+		p.s.Scan()
 	}
 	var pathBuilder strings.Builder
 	parenthesisBalanced := false
 	var previousToken string
-	for tok := s.Peek(); tok != scanner.EOF; s.Peek() {
-		pathBuilder.WriteString(s.TokenText())
-		s.Scan()
-		text := s.TokenText()
+	for tok := p.s.Peek(); tok != scanner.EOF; p.s.Peek() {
+		pathBuilder.WriteString(p.s.TokenText())
+		p.s.Scan()
+		text := p.s.TokenText()
 
 		if previousToken == dotToken && text == dotToken {
-			return nil, errors.New(`invalid substitution, two adjacent periods '.' (use quoted "" empty string if you want an empty element)`)
+			return nil, adjacentPeriodsError(p.s.Position.Line, p.s.Position.Column)
 		}
 
 		if text == "}" {
 			parenthesisBalanced = true
-			s.Scan()
+			p.s.Scan()
 			break
 		}
 
@@ -324,15 +358,18 @@ func extractSubstitution() (*Substitution, error) {
 	}
 
 	if !parenthesisBalanced {
-		return nil, errors.New("invalid substitution")
+		return nil, invalidSubstitutionError("missing closing parenthesis", p.s.Position.Line, p.s.Position.Column)
 	}
 
 	substitutionPath := pathBuilder.String()
 	if len(substitutionPath) == 0 {
-		return nil, errors.New("invalid substitution, path expression cannot be empty")
+		return nil, invalidSubstitutionError("path expression cannot be empty", p.s.Position.Line, p.s.Position.Column)
 	}
-	if strings.HasPrefix(substitutionPath, dotToken) || strings.HasSuffix(substitutionPath, dotToken) {
-		return nil, errors.New(`invalid substitution, leading or trailing period '.' (use quoted "" empty string if you want an empty element)`)
+	if strings.HasPrefix(substitutionPath, dotToken) {
+		return nil, leadingPeriodError(p.s.Position.Line, p.s.Position.Column)
+	}
+	if strings.HasSuffix(substitutionPath, dotToken) {
+		return nil, trailingPeriodError(p.s.Position.Line, p.s.Position.Column)
 	}
 	return &Substitution{path: substitutionPath, optional:optional}, nil
 }
@@ -360,6 +397,6 @@ func isTokenBooleanString(token string) bool {
 	return token == "true" || token == "yes" || token == "on" || token == "false" || token == "no" || token == "off"
 }
 
-func isSubstitution(token string) bool {
-	return token == "$" && s.Peek() == '{'
+func isSubstitution(token string, peekedToken rune) bool {
+	return token == "$" && peekedToken == '{'
 }
