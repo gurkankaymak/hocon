@@ -205,11 +205,6 @@ func (c *ConfigArray) Append(value ConfigValue) {
 	c.values = append(c.values, value)
 }
 
-type ConfigNumber interface {
-	ValueType() ValueType
-	String() string
-}
-
 type ConfigInt struct {
 	value int
 }

@@ -1,6 +1,8 @@
 package hocon
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestGetConfigObject(t *testing.T) {
 	config, _ := ParseString(`{a:{b:"c"}, d:[]}`)

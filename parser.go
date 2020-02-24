@@ -2,6 +2,8 @@ package hocon
 
 import (
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -21,26 +23,34 @@ const (
 	arrayStartToken  = "["
 	arrayEndToken    = "]"
 	plusEqualsToken  = "+="
+	includeToken     = "include"
 )
 
-type Parser struct {
-	s scanner.Scanner
+var forbiddenCharacters = map[string]bool{
+	"$": true, `"`: true, objectStartToken: true, objectEndToken: true, arrayStartToken: true, arrayEndToken: true,
+	colonToken: true, equalsToken: true, commaToken: true, "+": true, "#": true, "`": true, "^": true, "?": true,
+	"!": true, "@": true, "*": true, "&": true, `\`: true, "(": true, ")": true,
 }
 
-var parser Parser
+type Parser struct {
+	s *scanner.Scanner
+}
+
+func newParser(src io.Reader) *Parser {
+	return &Parser{new(scanner.Scanner).Init(src)}
+}
 
 func ParseString(input string) (*Config, error) {
-	parser.s.Init(strings.NewReader(input))
+	parser := newParser(strings.NewReader(input))
 	return parser.parse()
 }
 
-func ParseFile(path string) (*Config, error) {
+func ParseResource(path string) (*Config, error) {
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, err // TODO gk: return custom error (wrapped err could be returned)
+		return nil, fmt.Errorf("could not parse resource: %w", err)
 	}
-	parser.s.Init(file)
-	return parser.parse()
+	return newParser(file).parse()
 }
 
 func (p *Parser) parse() (*Config, error) {
@@ -96,30 +106,16 @@ func resolveSubstitutions(root *ConfigObject, configValueOptional ...ConfigValue
 func processSubstitution(root *ConfigObject, value ConfigValue, resolveFunc func(configValue ConfigValue)) error {
 	if value.ValueType() == ValueTypeSubstitution {
 		substitution := value.(*Substitution)
-		foundValue := root.find(substitution.path)
-		if foundValue != nil {
+		if foundValue := root.find(substitution.path); foundValue != nil {
 			resolveFunc(foundValue)
 		} else if !substitution.optional {
 			return errors.New("could not resolve substitution: " + substitution.String() + " to a value")
 		}
 	} else if valueType := value.ValueType(); valueType == ValueTypeObject || valueType == ValueTypeArray {
-		err := resolveSubstitutions(root, value)
-		if err != nil {
-			return err
-		}
+		return resolveSubstitutions(root, value)
 	}
 	return nil
 }
-
-/*// TODO gk: move method
-func parseIncludedFile(path string) (*ConfigObject, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, err // TODO gk: return custom error (wrapped err could be returned)
-	}
-	includeScanner.Init(file)
-	return extractConfigObject()
-}*/
 
 func (p *Parser) extractConfigObject() (*ConfigObject, error) {
 	root := map[string]ConfigValue{}
@@ -128,38 +124,46 @@ func (p *Parser) extractConfigObject() (*ConfigObject, error) {
 	if p.s.TokenText() == objectStartToken { // skip if current text is "{"
 		parenthesisBalanced = false
 		p.s.Scan()
-	}
-	for tok := p.s.Peek(); tok != scanner.EOF; tok = p.s.Peek() {
-		if !parenthesisBalanced && p.s.TokenText() == objectEndToken {  // skip "}"
+		if !parenthesisBalanced && p.s.TokenText() == objectEndToken {
 			parenthesisBalanced = true
 			p.s.Scan()
 			return NewConfigObject(root), nil
 		}
-
-		if p.s.TokenText() == commaToken {
-			p.s.Scan() // skip ","
+	}
+	for tok := p.s.Peek(); tok != scanner.EOF; tok = p.s.Peek() {
+		if p.s.TokenText() == includeToken {
+			p.s.Scan()
+			includePath, err := p.validateIncludeValue(p.s.TokenText())
+			if err != nil {
+				return nil, err
+			}
+			includedConfigObject, err := parseIncludedResource(includePath)
+			if err != nil {
+				return nil, err
+			}
+			mergeConfigObjects(root, includedConfigObject)
+			p.s.Scan()
 		}
 
-		/*if p.s.TokenText() == "include" {
-			p.s.Scan()
-			// TODO gk: perform validations for include value
-			parseIncludedFile(p.s.TokenText())
-		}*/
-
 		key := p.s.TokenText()
+		if forbiddenCharacters[key] {
+			return nil, errors.New("invalid key! '" + key + "' is a forbidden character in keys")
+		}
 		if key == dotToken {
 			return nil, leadingPeriodError(p.s.Position.Line, p.s.Position.Column)
 		}
 		p.s.Scan()
 		text := p.s.TokenText()
 
-		if text == dotToken {
-			p.s.Scan() // skip "."
-			if p.s.TokenText() == dotToken {
-				return nil, adjacentPeriodsError(p.s.Position.Line, p.s.Position.Column)
-			}
-			if p.parseSeparator(p.s.TokenText()) != "" {
-				return nil, trailingPeriodError(p.s.Position.Line, p.s.Position.Column)
+		if text == dotToken || text == objectStartToken {
+			if text == dotToken {
+				p.s.Scan() // skip "."
+				if p.s.TokenText() == dotToken {
+					return nil, adjacentPeriodsError(p.s.Position.Line, p.s.Position.Column)
+				}
+				if isSeparator(p.s.TokenText(), p.s.Peek()) {
+					return nil, trailingPeriodError(p.s.Position.Line, p.s.Position.Column)
+				}
 			}
 			configObject, err := p.extractConfigObject()
 			if err != nil {
@@ -177,8 +181,9 @@ func (p *Parser) extractConfigObject() (*ConfigObject, error) {
 			return NewConfigObject(map[string]ConfigValue{key:configObject}), nil
 		}
 
-		switch p.parseSeparator(text) {
+		switch text {
 		case equalsToken, colonToken:
+			p.s.Scan()
 			configValue, err := p.extractConfigValue()
 			if err != nil {
 				return nil, err
@@ -186,38 +191,29 @@ func (p *Parser) extractConfigObject() (*ConfigObject, error) {
 
 			if configObject, ok := configValue.(*ConfigObject); ok {
 				if existingConfigObject, ok := root[key].(*ConfigObject); ok {
-					mergedObject := mergeConfigObjects(existingConfigObject, configObject)
-					configValue = mergedObject
+					mergeConfigObjects(existingConfigObject.items, configObject)
+					configValue = existingConfigObject
 				}
 			}
 			root[key] = configValue
-		case plusEqualsToken:
-			existing, ok := root[key]
-			if !ok {
-				configValue, err := p.extractConfigValue()
+		case "+" :
+			if p.s.Peek() == '=' {
+				p.s.Scan()
+				p.s.Scan()
+				err := p.parsePlusEqualsValue(root, key)
 				if err != nil {
 					return nil, err
 				}
-				root[key] = NewConfigArray([]ConfigValue{configValue})
-			} else {
-				existingArray, ok := existing.(*ConfigArray)
-				if !ok {
-					return nil, errors.New("value of the key: " + key + " is not an array")
-				}
-				configValue, err := p.extractConfigValue()
-				if err != nil {
-					return nil, err
-				}
-				existingArray.Append(configValue)
 			}
 		}
 
-		if !parenthesisBalanced && p.s.TokenText() == objectEndToken {  // skip "}"
-			parenthesisBalanced = true
-			p.s.Scan()
+		if p.s.TokenText() == commaToken {
+			p.s.Scan() // skip ","
 		}
 
-		if parenthesisBalanced {
+		if !parenthesisBalanced && p.s.TokenText() == objectEndToken {
+			parenthesisBalanced = true
+			p.s.Scan()
 			return NewConfigObject(root), nil
 		}
 	}
@@ -228,33 +224,77 @@ func (p *Parser) extractConfigObject() (*ConfigObject, error) {
 	return NewConfigObject(root), nil
 }
 
-func mergeConfigObjects(existing, new *ConfigObject) *ConfigObject {
+func mergeConfigObjects(existingItems map[string]ConfigValue, new *ConfigObject) {
 	for key, value := range new.items {
-		existingValue, ok := existing.items[key]
+		existingValue, ok := existingItems[key]
 		if ok && existingValue.ValueType() == ValueTypeObject && value.ValueType() == ValueTypeObject {
-			mergedObject := mergeConfigObjects(existingValue.(*ConfigObject), value.(*ConfigObject))
-			value = mergedObject
+			existingObj := existingValue.(*ConfigObject)
+			mergeConfigObjects(existingObj.items, value.(*ConfigObject))
+			value = existingObj
 		}
-		existing.items[key] = value
+		existingItems[key] = value
 	}
-	return existing
 }
 
-func (p *Parser) parseSeparator(token string) string {
-	switch token {
-	case equalsToken, colonToken:
-		p.s.Scan()
-		return equalsToken
-	case "+":
-		if p.s.Peek() == '=' {
-			p.s.Scan()
-			p.s.Scan()
-			return plusEqualsToken
+func (p *Parser) parsePlusEqualsValue(existingItems map[string]ConfigValue, key string) error {
+	existing, ok := existingItems[key]
+	if !ok {
+		configValue, err := p.extractConfigValue()
+		if err != nil {
+			return err
 		}
-		return ""
-	default:
-		return ""
+		existingItems[key] = NewConfigArray([]ConfigValue{configValue})
+	} else {
+		existingArray, ok := existing.(*ConfigArray)
+		if !ok {
+			return errors.New("value of the key: " + key + " is not an array")
+		}
+		configValue, err := p.extractConfigValue()
+		if err != nil {
+			return err
+		}
+		existingArray.Append(configValue)
 	}
+	return nil
+}
+
+func (p *Parser) validateIncludeValue(includeValue string) (string, error) {
+	if includeValue == "file" || includeValue == "classpath" {
+		p.s.Scan()
+		if p.s.TokenText() != "(" {
+			return "", errors.New("invalid include value! missing opening parenthesis")
+		}
+		p.s.Scan()
+		path := p.s.TokenText()
+		p.s.Scan()
+		if p.s.TokenText() != ")" {
+			return "", errors.New("invalid include value! missing closing parenthesis")
+		}
+		includeValue = path
+	}
+	return includeValue, nil
+}
+
+func parseIncludedResource(path string) (*ConfigObject, error) {
+	if !strings.HasPrefix(path, `"`) {
+		return nil, errors.New(`invalid include value! expected quoted string, optionally wrapped in 'file(...)' or 'classpath(...)' `)
+	}
+	file, err := os.Open(strings.ReplaceAll(path, `"`, ""))
+	if errors.Is(err, os.ErrNotExist) {
+		return NewConfigObject(map[string]ConfigValue{}), nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("could not parse resource: %w", err)
+	}
+	parser := newParser(file)
+	defer file.Close()
+	parser.s.Scan()
+
+	if parser.s.TokenText() == arrayStartToken {
+		return nil, errors.New("invalid included file! included file cannot contain an array as the root value")
+	}
+
+	return parser.extractConfigObject()
 }
 
 func (p *Parser) extractConfigArray() (*ConfigArray, error) {
@@ -399,4 +439,8 @@ func isTokenBooleanString(token string) bool {
 
 func isSubstitution(token string, peekedToken rune) bool {
 	return token == "$" && peekedToken == '{'
+}
+
+func isSeparator(token string, peekedToken rune) bool {
+	return token == equalsToken || token == colonToken || (token == "+" && peekedToken == '=')
 }

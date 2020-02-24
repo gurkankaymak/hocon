@@ -48,6 +48,16 @@ func assertNoError(err error, t *testing.T) {
 	}
 }
 
+// TODO gk: instead of comparing error strings compare the errors, fix this after the custom errors are defined
+func assertError(err error, t *testing.T, expected ...error) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("expected an error but did not get one")
+	} else if len(expected) > 0 && expected[0].Error() != err.Error() {
+		t.Fatalf("wrong error received! expected: %q, got: %q", expected[0], err)
+	}
+}
+
 func assertDeepEqual(got, expected interface{}, t *testing.T) {
 	t.Helper()
 	if !reflect.DeepEqual(got, expected) {
