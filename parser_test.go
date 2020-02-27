@@ -11,36 +11,36 @@ func TestParse(t *testing.T) {
 	t.Run("parse simple object", func(t *testing.T) {
 		parser := newParser(strings.NewReader(`{a:"b"}`))
 		config, err := parser.parse()
-		assertNoError(err, t)
-		assertConfigEquals(config, "{a:b}", t)
+		assertNoError(t, err)
+		assertConfigEquals(t, config, "{a:b}")
 	})
 
 	t.Run("parse simple array", func(t *testing.T) {
 		parser := newParser(strings.NewReader(`["a", "b"]`))
 		config, err := parser.parse()
-		assertNoError(err, t)
-		assertConfigEquals(config, "[a,b]", t)
+		assertNoError(t, err)
+		assertConfigEquals(t, config, "[a,b]")
 	})
 
 	t.Run("parse nested object", func(t *testing.T) {
 		parser := newParser(strings.NewReader(`{a: {c: "d"}}`))
 		config, err := parser.parse()
-		assertNoError(err, t)
-		assertConfigEquals(config, "{a:{c:d}}", t)
+		assertNoError(t, err)
+		assertConfigEquals(t, config, "{a:{c:d}}")
 	})
 
 	t.Run("parse with the omitted root braces", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a=1"))
 		config, err := parser.parse()
-		assertNoError(err, t)
-		assertConfigEquals(config, "{a:1}", t)
+		assertNoError(t, err)
+		assertConfigEquals(t, config, "{a:1}")
 	})
 
 	t.Run("parse the path key", func(t *testing.T) {
 		parser := newParser(strings.NewReader(`{a.b:"c"}`))
 		config, err := parser.parse()
-		assertNoError(err, t)
-		assertConfigEquals(config, "{a:{b:c}}", t)
+		assertNoError(t, err)
+		assertConfigEquals(t, config, "{a:{b:c}}")
 	})
 }
 
@@ -50,7 +50,7 @@ func TestMergeConfigObjects(t *testing.T) {
 		configObject := NewConfigObject(map[string]ConfigValue{"c": NewConfigInt(3)})
 		expected := map[string]ConfigValue{"b": NewConfigInt(5), "c": NewConfigInt(3)}
 		mergeConfigObjects(existingItems, configObject)
-		assertDeepEqual(existingItems, expected, t)
+		assertDeepEqual(t, existingItems, expected)
 	})
 
 	t.Run("merge config objects recursively if both parameters contain the same key as of type *ConfigObject", func(t *testing.T) {
@@ -67,7 +67,7 @@ func TestMergeConfigObjects(t *testing.T) {
 			"c": NewConfigInt(3),
 		}
 		mergeConfigObjects(existingItems, configObject)
-		assertDeepEqual(existingItems, expected, t)
+		assertDeepEqual(t, existingItems, expected)
 	})
 
 	t.Run("merge config objects recursively, config from the second parameter should override the first one if any of them are not of type *ConfigObject", func(t *testing.T) {
@@ -78,7 +78,7 @@ func TestMergeConfigObjects(t *testing.T) {
 		configObject := NewConfigObject(map[string]ConfigValue{"b": NewConfigInt(7)})
 		expected := map[string]ConfigValue{"b": NewConfigInt(7), "c": NewConfigInt(3)} // {b:7, c:3}
 		mergeConfigObjects(existingItems, configObject)
-		assertDeepEqual(existingItems, expected, t)
+		assertDeepEqual(t, existingItems, expected)
 	})
 }
 
@@ -89,7 +89,7 @@ func TestResolveSubstitutions(t *testing.T) {
 			"b": &Substitution{"a", false},
 		})
 		err := resolveSubstitutions(configObject)
-		assertNoError(err, t)
+		assertNoError(t, err)
 	})
 
 	t.Run("return an error for non-existing substitution path", func(t *testing.T) {
@@ -100,7 +100,7 @@ func TestResolveSubstitutions(t *testing.T) {
 		})
 		err := resolveSubstitutions(configObject)
 		expectedError := errors.New("could not resolve substitution: " + substitution.String() + " to a value")
-		assertError(err, t, expectedError)
+		assertError(t, err, expectedError)
 	})
 
 	t.Run("ignore the optional substitution if it's path does not exist", func(t *testing.T) {
@@ -109,7 +109,7 @@ func TestResolveSubstitutions(t *testing.T) {
 			"b": &Substitution{"c", true},
 		})
 		err := resolveSubstitutions(configObject)
-		assertNoError(err, t)
+		assertNoError(t, err)
 	})
 
 	t.Run("resolve valid substitution at the non-root level", func(t *testing.T) {
@@ -119,7 +119,7 @@ func TestResolveSubstitutions(t *testing.T) {
 			"b": subConfigObject,
 		})
 		err := resolveSubstitutions(configObject, subConfigObject)
-		assertNoError(err, t)
+		assertNoError(t, err)
 	})
 
 	t.Run("resolve valid substitution inside an array", func(t *testing.T) {
@@ -129,7 +129,7 @@ func TestResolveSubstitutions(t *testing.T) {
 			"b": subConfigArray,
 		})
 		err := resolveSubstitutions(configObject, subConfigArray)
-		assertNoError(err, t)
+		assertNoError(t, err)
 	})
 
 	t.Run("return error for non-existing substitution path inside an array", func(t *testing.T) {
@@ -141,7 +141,7 @@ func TestResolveSubstitutions(t *testing.T) {
 		})
 		err := resolveSubstitutions(configObject, subConfigArray)
 		expectedError := errors.New("could not resolve substitution: " + substitution.String() + " to a value")
-		assertError(err, t, expectedError)
+		assertError(t, err, expectedError)
 	})
 
 	t.Run("return error for non-existing substitution path inside an array", func(t *testing.T) {
@@ -151,7 +151,7 @@ func TestResolveSubstitutions(t *testing.T) {
 			"b": subConfigArray,
 		})
 		err := resolveSubstitutions(configObject, subConfigArray)
-		assertNoError(err, t)
+		assertNoError(t, err)
 	})
 
 	t.Run("return array if subConfig is not an object or array", func(t *testing.T) {
@@ -162,7 +162,7 @@ func TestResolveSubstitutions(t *testing.T) {
 		})
 		err := resolveSubstitutions(configObject, subConfigInt)
 		expectedError := errors.New("invalid type for substitution, substitutions are only allowed in field values and array elements")
-		assertError(err, t, expectedError)
+		assertError(t, err, expectedError)
 	})
 }
 
@@ -176,8 +176,8 @@ func TestParsePlusEqualsValue(t *testing.T) {
 		existingItems := map[string]ConfigValue{}
 		expected := map[string]ConfigValue{"a": NewConfigArray([]ConfigValue{NewConfigInt(42)})}
 		err := parser.parsePlusEqualsValue(existingItems, "a", currentRune)
-		assertNoError(err, t)
-		assertDeepEqual(existingItems, expected, t)
+		assertNoError(t, err)
+		assertDeepEqual(t, existingItems, expected)
 	})
 
 	t.Run("return the error received from extractConfigValue method if any, if the existingItems map does not contain a value with the given key", func(t *testing.T) {
@@ -188,7 +188,7 @@ func TestParsePlusEqualsValue(t *testing.T) {
 		}
 		err := parser.parsePlusEqualsValue(map[string]ConfigValue{}, "a", currentRune)
 		expectedError := invalidConfigArray("parenthesis do not match", 1, 7)
-		assertError(err, t, expectedError)
+		assertError(t, err, expectedError)
 	})
 
 	t.Run("return an error if the existingItems map contains non-array value with the given key", func(t *testing.T) {
@@ -200,7 +200,7 @@ func TestParsePlusEqualsValue(t *testing.T) {
 		existingItems := map[string]ConfigValue{"a": NewConfigInt(1)}
 		err := parser.parsePlusEqualsValue(existingItems, "a", currentRune)
 		expectedError := fmt.Errorf("value of the key: %q is not an array", "a")
-		assertError(err, t, expectedError)
+		assertError(t, err, expectedError)
 	})
 
 	t.Run("return the error received from extractConfigValue method if any, if the existingItems map contains an array with the given key", func(t *testing.T) {
@@ -212,7 +212,7 @@ func TestParsePlusEqualsValue(t *testing.T) {
 		existingItems := map[string]ConfigValue{"a": NewConfigArray([]ConfigValue{NewConfigInt(5)})}
 		err := parser.parsePlusEqualsValue(existingItems, "a", currentRune)
 		expectedError := invalidConfigObject("parenthesis do not match", 1, 15)
-		assertError(err, t, expectedError)
+		assertError(t, err, expectedError)
 	})
 
 	t.Run("append the value if the existingItems map contains an array with the given key", func(t *testing.T) {
@@ -224,8 +224,8 @@ func TestParsePlusEqualsValue(t *testing.T) {
 		existingItems := map[string]ConfigValue{"a": NewConfigArray([]ConfigValue{NewConfigInt(5)})}
 		expected := map[string]ConfigValue{"a": NewConfigArray([]ConfigValue{NewConfigInt(5), NewConfigInt(42)})}
 		err := parser.parsePlusEqualsValue(existingItems, "a", currentRune)
-		assertNoError(err, t)
-		assertDeepEqual(existingItems, expected, t)
+		assertNoError(t, err)
+		assertDeepEqual(t, existingItems, expected)
 	})
 }
 
@@ -235,8 +235,8 @@ func TestValidateIncludeValue(t *testing.T) {
 		for ; parser.scanner.TokenText() != "file"; parser.scanner.Scan() {}
 		expectedError := errors.New("invalid include value! missing opening parenthesis")
 		path, err := parser.validateIncludeValue()
-		assertError(err, t, expectedError)
-		assertEquals(path, "", t)
+		assertError(t, err, expectedError)
+		assertEquals(t, path, "")
 	})
 
 	t.Run("return error if the include value starts with 'file' but closing parenthesis is missing", func(t *testing.T) {
@@ -244,8 +244,8 @@ func TestValidateIncludeValue(t *testing.T) {
 		for ; parser.scanner.TokenText() != "file"; parser.scanner.Scan() {}
 		expectedError := errors.New("invalid include value! missing closing parenthesis")
 		path, err := parser.validateIncludeValue()
-		assertError(err, t, expectedError)
-		assertEquals(path, "", t)
+		assertError(t, err, expectedError)
+		assertEquals(t, path, "")
 	})
 
 	t.Run("return error if the include value starts with 'classpath' but opening parenthesis is missing", func(t *testing.T) {
@@ -253,8 +253,8 @@ func TestValidateIncludeValue(t *testing.T) {
 		for ; parser.scanner.TokenText() != "classpath"; parser.scanner.Scan() {}
 		expectedError := errors.New("invalid include value! missing opening parenthesis")
 		path, err := parser.validateIncludeValue()
-		assertError(err, t, expectedError)
-		assertEquals(path, "", t)
+		assertError(t, err, expectedError)
+		assertEquals(t, path, "")
 	})
 
 	t.Run("return error if the include value starts with 'classpath' but closing parenthesis is missing", func(t *testing.T) {
@@ -262,8 +262,8 @@ func TestValidateIncludeValue(t *testing.T) {
 		for ; parser.scanner.TokenText() != "classpath"; parser.scanner.Scan() {}
 		expectedError := errors.New("invalid include value! missing closing parenthesis")
 		path, err := parser.validateIncludeValue()
-		assertError(err, t, expectedError)
-		assertEquals(path, "", t)
+		assertError(t, err, expectedError)
+		assertEquals(t, path, "")
 	})
 
 	t.Run("return error if the include value is not a quoted string", func(t *testing.T) {
@@ -271,32 +271,32 @@ func TestValidateIncludeValue(t *testing.T) {
 		for ; parser.scanner.TokenText() != "abc"; parser.scanner.Scan() {}
 		expectedError := errors.New(`invalid include value! expected quoted string, optionally wrapped in 'file(...)' or 'classpath(...)' `)
 		path, err := parser.validateIncludeValue()
-		assertError(err, t, expectedError)
-		assertEquals(path, "", t)
+		assertError(t, err, expectedError)
+		assertEquals(t, path, "")
 	})
 	
 	t.Run("return the path with quotes removed", func(t *testing.T) {
 		parser := newParser(strings.NewReader(`include "abc.conf"`))
 		for ; parser.scanner.TokenText() != `"abc.conf"`; parser.scanner.Scan() {}
 		path, err := parser.validateIncludeValue()
-		assertNoError(err, t)
-		assertEquals(path, "abc.conf", t)
+		assertNoError(t, err)
+		assertEquals(t, path, "abc.conf")
 	})
 
 	t.Run("return the path in file(...) with quotes removed", func(t *testing.T) {
 		parser := newParser(strings.NewReader(`include file("abc.conf")`))
 		for ; parser.scanner.TokenText() != "file"; parser.scanner.Scan() {}
 		path, err := parser.validateIncludeValue()
-		assertNoError(err, t)
-		assertEquals(path, "abc.conf", t)
+		assertNoError(t, err)
+		assertEquals(t, path, "abc.conf")
 	})
 
 	t.Run("return the path in classpath(...) with quotes removed", func(t *testing.T) {
 		parser := newParser(strings.NewReader(`include classpath("abc.conf")`))
 		for ; parser.scanner.TokenText() != "classpath"; parser.scanner.Scan() {}
 		path, err := parser.validateIncludeValue()
-		assertNoError(err, t)
-		assertEquals(path, "abc.conf", t)
+		assertNoError(t, err)
+		assertEquals(t, path, "abc.conf")
 	})
 }
 
@@ -306,7 +306,7 @@ func TestParseIncludedResource(t *testing.T) {
 		for ; parser.scanner.TokenText() != "abc"; parser.scanner.Scan() {}
 		expectedError := errors.New(`invalid include value! expected quoted string, optionally wrapped in 'file(...)' or 'classpath(...)' `)
 		configObject, err := parser.parseIncludedResource()
-		assertError(err, t, expectedError)
+		assertError(t, err, expectedError)
 		assertNil(t, configObject)
 	})
 
@@ -315,7 +315,7 @@ func TestParseIncludedResource(t *testing.T) {
 		for ; parser.scanner.TokenText() != `"nonExistFile.conf"`; parser.scanner.Scan() {}
 		configObject, err := parser.parseIncludedResource()
 		assertNil(t, err)
-		assertConfigEquals(configObject, "{}", t)
+		assertConfigEquals(t, configObject, "{}")
 	})
 
 	t.Run("return an error if the included file contains an array as the value", func(t *testing.T) {
@@ -323,7 +323,7 @@ func TestParseIncludedResource(t *testing.T) {
 		for ; parser.scanner.TokenText() != `"testdata/array.conf"`; parser.scanner.Scan() {}
 		expectedError := errors.New("invalid included file! included file cannot contain an array as the root value")
 		configObject, err := parser.parseIncludedResource()
-		assertError(err, t, expectedError)
+		assertError(t, err, expectedError)
 		assertNil(t, configObject)
 	})
 
@@ -331,8 +331,8 @@ func TestParseIncludedResource(t *testing.T) {
 		parser := newParser(strings.NewReader(`include "testdata/a.conf"`))
 		for ; parser.scanner.TokenText() != `"testdata/a.conf"`; parser.scanner.Scan() {}
 		configObject, err := parser.parseIncludedResource()
-		assertNoError(err, t)
-		assertConfigEquals(configObject, "{a:1}", t)
+		assertNoError(t, err)
+		assertConfigEquals(t, configObject, "{a:1}")
 	})
 }
 
@@ -342,7 +342,7 @@ func TestExtractSubstitution(t *testing.T) {
 		for ; parser.scanner.TokenText() != "$"; parser.scanner.Scan() {}
 		expectedError := invalidSubstitutionError("path expression cannot be empty", 1, 5)
 		substitution, err := parser.extractSubstitution()
-		assertError(err, t, expectedError)
+		assertError(t, err, expectedError)
 		assertNil(t, substitution)
 	})
 
@@ -351,7 +351,7 @@ func TestExtractSubstitution(t *testing.T) {
 		for ; parser.scanner.TokenText() != "$"; parser.scanner.Scan() {}
 		expectedError := leadingPeriodError(1, 5)
 		substitution, err := parser.extractSubstitution()
-		assertError(err, t, expectedError)
+		assertError(t, err, expectedError)
 		assertNil(t, substitution)
 	})
 
@@ -360,7 +360,7 @@ func TestExtractSubstitution(t *testing.T) {
 		for ; parser.scanner.TokenText() != "$"; parser.scanner.Scan() {}
 		expectedError := adjacentPeriodsError(1,7)
 		substitution, err := parser.extractSubstitution()
-		assertError(err, t, expectedError)
+		assertError(t, err, expectedError)
 		assertNil(t, substitution)
 	})
 
@@ -369,7 +369,7 @@ func TestExtractSubstitution(t *testing.T) {
 		for ; parser.scanner.TokenText() != "$"; parser.scanner.Scan() {}
 		expectedError := invalidSubstitutionError("missing closing parenthesis", 1, 5)
 		substitution, err := parser.extractSubstitution()
-		assertError(err, t, expectedError)
+		assertError(t, err, expectedError)
 		assertNil(t, substitution)
 	})
 
@@ -378,7 +378,7 @@ func TestExtractSubstitution(t *testing.T) {
 		for ; parser.scanner.TokenText() != "$"; parser.scanner.Scan() {}
 		expectedError := trailingPeriodError(1, 6)
 		substitution, err := parser.extractSubstitution()
-		assertError(err, t, expectedError)
+		assertError(t, err, expectedError)
 		assertNil(t, substitution)
 	})
 
@@ -387,8 +387,8 @@ func TestExtractSubstitution(t *testing.T) {
 		for ; parser.scanner.TokenText() != "$"; parser.scanner.Scan() {}
 		expected := &Substitution{path: "b.c", optional: false}
 		substitution, err := parser.extractSubstitution()
-		assertNoError(err, t)
-		assertDeepEqual(substitution, expected, t)
+		assertNoError(t, err)
+		assertDeepEqual(t, substitution, expected)
 	})
 
 	t.Run("parse and return a pointer to the optional substitution", func(t *testing.T) {
@@ -396,8 +396,8 @@ func TestExtractSubstitution(t *testing.T) {
 		for ; parser.scanner.TokenText() != "$"; parser.scanner.Scan() {}
 		expected := &Substitution{path: "b.c", optional: true}
 		substitution, err := parser.extractSubstitution()
-		assertNoError(err, t)
-		assertDeepEqual(substitution, expected, t)
+		assertNoError(t, err)
+		assertDeepEqual(t, substitution, expected)
 	})
 
 	for forbiddenChar, _ := range forbiddenCharacters {
@@ -407,7 +407,7 @@ func TestExtractSubstitution(t *testing.T) {
 				for ; parser.scanner.TokenText() != "$"; parser.scanner.Scan() {}
 				expectedError := fmt.Errorf("invalid key! %q is a forbidden character in keys", forbiddenChar)
 				substitution, err := parser.extractSubstitution()
-				assertError(err, t, expectedError)
+				assertError(t, err, expectedError)
 				assertNil(t, substitution)
 			}
 		})
@@ -429,7 +429,7 @@ func TestIsSubstitution(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("return %v if the token is %q and the peekedToken is %q", tc.expected, tc.token, tc.peekedToken), func(t *testing.T) {
 			got := isSubstitution(tc.token, tc.peekedToken)
-			assertEquals(got, tc.expected, t)
+			assertEquals(t, got, tc.expected)
 		})
 	}
 }

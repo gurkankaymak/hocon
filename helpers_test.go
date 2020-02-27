@@ -6,14 +6,14 @@ import (
 	"testing"
 )
 
-func assertEquals(got, expected interface{}, t *testing.T) {
+func assertEquals(t *testing.T, got, expected interface{}) {
 	t.Helper()
 	if got != expected {
-		fail(got, expected, t)
+		fail(t, got, expected)
 	}
 }
 
-func assertPanic(fn func(), t *testing.T, expectedMessage ...string) {
+func assertPanic(t *testing.T, fn func(), expectedMessage ...string) {
 	t.Helper()
 	defer func() {
 		r := recover()
@@ -23,25 +23,25 @@ func assertPanic(fn func(), t *testing.T, expectedMessage ...string) {
 		switch recovered := r.(type) {
 		case string:
 			if len(expectedMessage) > 0 && recovered != expectedMessage[0] {
-				wrongPanic(recovered, expectedMessage[0], t)
+				wrongPanic(t, recovered, expectedMessage[0])
 			}
 		case error:
 			if messageGot := recovered.Error(); len(expectedMessage) > 0 && messageGot != expectedMessage[0] {
-				wrongPanic(messageGot, expectedMessage[0], t)
+				wrongPanic(t, messageGot, expectedMessage[0])
 			}
 		}
 	}()
 	fn()
 }
 
-func assertConfigEquals(got fmt.Stringer, expected string, t *testing.T) {
+func assertConfigEquals(t *testing.T, got fmt.Stringer, expected string) {
 	t.Helper()
 	if got.String() != expected {
-		fail(got, expected, t)
+		fail(t, got, expected)
 	}
 }
 
-func assertNoError(err error, t *testing.T) {
+func assertNoError(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
 		t.Fatalf("not expected an error, got err: %q", err)
@@ -49,7 +49,7 @@ func assertNoError(err error, t *testing.T) {
 }
 
 // TODO gk: instead of comparing error strings compare the errors, fix this after the custom errors are defined
-func assertError(err error, t *testing.T, expected ...error) {
+func assertError(t *testing.T, err error, expected ...error) {
 	t.Helper()
 	if err == nil {
 		t.Fatalf("expected an error but did not get one")
@@ -58,26 +58,26 @@ func assertError(err error, t *testing.T, expected ...error) {
 	}
 }
 
-func assertDeepEqual(got, expected interface{}, t *testing.T) {
+func assertDeepEqual(t *testing.T, got, expected interface{}) {
 	t.Helper()
 	if !reflect.DeepEqual(got, expected) {
-		fail(got, expected, t)
+		fail(t, got, expected)
 	}
 }
 
 func assertNil(t *testing.T, i interface{}) {
 	t.Helper()
 	if !isNil(i) {
-		fail(i, nil, t)
+		fail(t, i, nil)
 	}
 }
 
-func fail(got, expected interface{}, t *testing.T) {
+func fail(t *testing.T, got, expected interface{}) {
 	t.Helper()
 	t.Errorf("expected: %q, got: %q", expected, got)
 }
 
-func wrongPanic(got, expected string, t *testing.T) {
+func wrongPanic(t *testing.T, got, expected string) {
 	t.Helper()
 	t.Errorf("wrong panic received! expected: %q, got: %q", expected, got)
 }
