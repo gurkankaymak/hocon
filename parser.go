@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"text/scanner"
-	"unicode"
 )
 
 //type TokenType string
@@ -133,11 +132,7 @@ func (p *Parser) extractConfigObject() (*ConfigObject, error) {
 	for tok := p.scanner.Peek(); tok != scanner.EOF; tok = p.scanner.Peek() {
 		if p.scanner.TokenText() == includeToken {
 			p.scanner.Scan()
-			includePath, err := p.validateIncludeValue(p.scanner.TokenText())
-			if err != nil {
-				return nil, err
-			}
-			includedConfigObject, err := parseIncludedResource(includePath)
+			includedConfigObject, err := p.parseIncludedResource()
 			if err != nil {
 				return nil, err
 			}
@@ -147,7 +142,7 @@ func (p *Parser) extractConfigObject() (*ConfigObject, error) {
 
 		key := p.scanner.TokenText()
 		if forbiddenCharacters[key] {
-			return nil, errors.New("invalid key! '" + key + "' is a forbidden character in keys")
+			return nil, fmt.Errorf("invalid key! %q is a forbidden character in keys", key)
 		}
 		if key == dotToken {
 			return nil, leadingPeriodError(p.scanner.Position.Line, p.scanner.Position.Column)
@@ -247,7 +242,7 @@ func (p *Parser) parsePlusEqualsValue(existingItems map[string]ConfigValue, key 
 	} else {
 		existingArray, ok := existing.(*ConfigArray)
 		if !ok {
-			return errors.New("value of the key: " + key + " is not an array")
+			return fmt.Errorf("value of the key: %q is not an array", key)
 		}
 		configValue, err := p.extractConfigValue(currentRune)
 		if err != nil {
@@ -258,7 +253,8 @@ func (p *Parser) parsePlusEqualsValue(existingItems map[string]ConfigValue, key 
 	return nil
 }
 
-func (p *Parser) validateIncludeValue(includeValue string) (string, error) {
+func (p *Parser) validateIncludeValue() (string, error) {
+	includeValue := p.scanner.TokenText()
 	if includeValue == "file" || includeValue == "classpath" {
 		p.scanner.Scan()
 		if p.scanner.TokenText() != "(" {
@@ -272,29 +268,33 @@ func (p *Parser) validateIncludeValue(includeValue string) (string, error) {
 		}
 		includeValue = path
 	}
-	return includeValue, nil
+	if !strings.HasPrefix(includeValue, `"`) {
+		return "", errors.New(`invalid include value! expected quoted string, optionally wrapped in 'file(...)' or 'classpath(...)' `)
+	}
+	return strings.ReplaceAll(includeValue, `"`, ""), nil
 }
 
-func parseIncludedResource(path string) (*ConfigObject, error) {
-	if !strings.HasPrefix(path, `"`) {
-		return nil, errors.New(`invalid include value! expected quoted string, optionally wrapped in 'file(...)' or 'classpath(...)' `)
+func (p *Parser) parseIncludedResource() (*ConfigObject, error) {
+	path, err := p.validateIncludeValue()
+	if err != nil {
+		return nil, err
 	}
-	file, err := os.Open(strings.ReplaceAll(path, `"`, ""))
+	file, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return NewConfigObject(map[string]ConfigValue{}), nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("could not parse resource: %w", err)
 	}
-	parser := newParser(file)
+	includeParser := newParser(file)
 	defer file.Close()
-	parser.scanner.Scan()
+	includeParser.scanner.Scan()
 
-	if parser.scanner.TokenText() == arrayStartToken {
+	if includeParser.scanner.TokenText() == arrayStartToken {
 		return nil, errors.New("invalid included file! included file cannot contain an array as the root value")
 	}
 
-	return parser.extractConfigObject()
+	return includeParser.extractConfigObject()
 }
 
 func (p *Parser) extractConfigArray() (*ConfigArray, error) {
@@ -329,7 +329,7 @@ func (p *Parser) extractConfigArray() (*ConfigArray, error) {
 	if parenthesisBalanced {
 		return NewConfigArray(values), nil
 	}
-	return nil, invalidConfigArray("parenthesis does not match", p.scanner.Position.Line, p.scanner.Position.Column)
+	return nil, invalidConfigArray("parenthesis do not match", p.scanner.Position.Line, p.scanner.Position.Column)
 }
 
 func (p *Parser) extractConfigValue(currentRune rune) (ConfigValue, error) {
@@ -380,6 +380,14 @@ func (p *Parser) extractSubstitution() (*Substitution, error) {
 		optional = true
 		p.scanner.Scan()
 	}
+	firstToken := p.scanner.TokenText()
+	if firstToken == objectEndToken {
+		return nil, invalidSubstitutionError("path expression cannot be empty", p.scanner.Position.Line, p.scanner.Position.Column)
+	}
+	if firstToken == dotToken {
+		return nil, leadingPeriodError(p.scanner.Position.Line, p.scanner.Position.Column)
+	}
+
 	var pathBuilder strings.Builder
 	parenthesisBalanced := false
 	var previousToken string
@@ -392,14 +400,17 @@ func (p *Parser) extractSubstitution() (*Substitution, error) {
 			return nil, adjacentPeriodsError(p.scanner.Position.Line, p.scanner.Position.Column)
 		}
 
-		if text == "}" {
+		if text == objectEndToken {
+			if previousToken == dotToken {
+				return nil, trailingPeriodError(p.scanner.Position.Line, p.scanner.Position.Column - 1)
+			}
 			parenthesisBalanced = true
 			p.scanner.Scan()
 			break
 		}
 
-		if text != dotToken && len(text) == 1 && !unicode.IsLetter(rune(text[0])) {
-			break
+		if forbiddenCharacters[text] {
+			return nil, fmt.Errorf("invalid key! %q is a forbidden character in keys", text)
 		}
 
 		previousToken = text
@@ -409,17 +420,7 @@ func (p *Parser) extractSubstitution() (*Substitution, error) {
 		return nil, invalidSubstitutionError("missing closing parenthesis", p.scanner.Position.Line, p.scanner.Position.Column)
 	}
 
-	substitutionPath := pathBuilder.String()
-	if len(substitutionPath) == 0 {
-		return nil, invalidSubstitutionError("path expression cannot be empty", p.scanner.Position.Line, p.scanner.Position.Column)
-	}
-	if strings.HasPrefix(substitutionPath, dotToken) {
-		return nil, leadingPeriodError(p.scanner.Position.Line, p.scanner.Position.Column)
-	}
-	if strings.HasSuffix(substitutionPath, dotToken) {
-		return nil, trailingPeriodError(p.scanner.Position.Line, p.scanner.Position.Column)
-	}
-	return &Substitution{path: substitutionPath, optional:optional}, nil
+	return &Substitution{path: pathBuilder.String(), optional:optional}, nil
 }
 
 func isBooleanString(token string) bool {

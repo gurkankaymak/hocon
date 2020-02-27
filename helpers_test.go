@@ -65,11 +65,30 @@ func assertDeepEqual(got, expected interface{}, t *testing.T) {
 	}
 }
 
+func assertNil(t *testing.T, i interface{}) {
+	t.Helper()
+	if !isNil(i) {
+		fail(i, nil, t)
+	}
+}
+
 func fail(got, expected interface{}, t *testing.T) {
 	t.Helper()
 	t.Errorf("expected: %q, got: %q", expected, got)
 }
 
 func wrongPanic(got, expected string, t *testing.T) {
+	t.Helper()
 	t.Errorf("wrong panic received! expected: %q, got: %q", expected, got)
+}
+
+func isNil(i interface{}) bool {
+	if i == nil {
+		return true
+	}
+	switch value := reflect.ValueOf(i); value.Kind() {
+	case reflect.Ptr, reflect.Chan, reflect.Func, reflect.Map, reflect.UnsafePointer, reflect.Interface, reflect.Slice:
+		return value.IsNil()
+	}
+	return false
 }
