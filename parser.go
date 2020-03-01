@@ -66,6 +66,9 @@ func (p *Parser) parse() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	if token := p.scanner.TokenText(); token != "" {
+		return nil, invalidConfigObject("invalid token " + token, p.scanner.Position.Line, p.scanner.Column)
+	}
 	err = resolveSubstitutions(configObject)
 	if err != nil {
 		return nil, err
@@ -120,7 +123,7 @@ func (p *Parser) extractConfigObject() (*ConfigObject, error) {
 	root := map[string]ConfigValue{}
 	parenthesisBalanced := true
 
-	if p.scanner.TokenText() == objectStartToken { // skip if current text is "{"
+	if p.scanner.TokenText() == objectStartToken {
 		parenthesisBalanced = false
 		p.scanner.Scan()
 		if !parenthesisBalanced && p.scanner.TokenText() == objectEndToken {
@@ -157,23 +160,14 @@ func (p *Parser) extractConfigObject() (*ConfigObject, error) {
 					return nil, adjacentPeriodsError(p.scanner.Position.Line, p.scanner.Position.Column)
 				}
 				if isSeparator(p.scanner.TokenText(), p.scanner.Peek()) {
-					return nil, trailingPeriodError(p.scanner.Position.Line, p.scanner.Position.Column)
+					return nil, trailingPeriodError(p.scanner.Position.Line, p.scanner.Position.Column - 1)
 				}
 			}
 			configObject, err := p.extractConfigObject()
 			if err != nil {
 				return nil, err
 			}
-
-			if !parenthesisBalanced && p.scanner.TokenText() == objectEndToken {
-				parenthesisBalanced = true
-				p.scanner.Scan()
-			}
-
-			if !parenthesisBalanced {
-				return nil, invalidConfigObject("parenthesis do not match", p.scanner.Position.Line, p.scanner.Position.Column)
-			}
-			return NewConfigObject(map[string]ConfigValue{key:configObject}), nil
+			root[key] = configObject
 		}
 
 		switch text {
@@ -209,7 +203,7 @@ func (p *Parser) extractConfigObject() (*ConfigObject, error) {
 		if !parenthesisBalanced && p.scanner.TokenText() == objectEndToken {
 			parenthesisBalanced = true
 			p.scanner.Scan()
-			return NewConfigObject(root), nil
+			break
 		}
 	}
 
@@ -242,7 +236,7 @@ func (p *Parser) parsePlusEqualsValue(existingItems map[string]ConfigValue, key 
 	} else {
 		existingArray, ok := existing.(*ConfigArray)
 		if !ok {
-			return fmt.Errorf("value of the key: %q is not an array", key)
+			return fmt.Errorf("value: %q of the key: %q is not an array", existing.String(), key)
 		}
 		configValue, err := p.extractConfigValue(currentRune)
 		if err != nil {
@@ -299,11 +293,11 @@ func (p *Parser) parseIncludedResource() (*ConfigObject, error) {
 
 func (p *Parser) extractConfigArray() (*ConfigArray, error) {
 	var values []ConfigValue
-	if p.scanner.TokenText() != arrayStartToken {
-		return nil, invalidConfigArray("not an array start token", p.scanner.Position.Line, p.scanner.Position.Column)
+	if firstToken := p.scanner.TokenText(); firstToken != arrayStartToken {
+		return nil, invalidConfigArray(fmt.Sprintf("%q is not an array start token", firstToken), p.scanner.Position.Line, p.scanner.Position.Column)
 	}
 	parenthesisBalanced := false
-	currentRune := p.scanner.Scan()                            // skip "["
+	currentRune := p.scanner.Scan()
 	if p.scanner.TokenText() == arrayEndToken { // empty array
 		currentRune = p.scanner.Scan()
 		return NewConfigArray(values), nil
@@ -313,23 +307,21 @@ func (p *Parser) extractConfigArray() (*ConfigArray, error) {
 		if err != nil {
 			return nil, err
 		}
-		if configValue != nil {
-			values = append(values, configValue)
-		}
+		values = append(values, configValue)
 		if p.scanner.TokenText() == commaToken {
 			currentRune = p.scanner.Scan() // skip comma
 		}
 
-		if !parenthesisBalanced && p.scanner.TokenText() == arrayEndToken { // skip "]"
+		if !parenthesisBalanced && p.scanner.TokenText() == arrayEndToken {
 			parenthesisBalanced = true
 			currentRune = p.scanner.Scan()
-			return NewConfigArray(values), nil
+			break
 		}
 	}
-	if parenthesisBalanced {
-		return NewConfigArray(values), nil
+	if !parenthesisBalanced {
+		return nil, invalidConfigArray("parenthesis do not match", p.scanner.Position.Line, p.scanner.Position.Column)
 	}
-	return nil, invalidConfigArray("parenthesis do not match", p.scanner.Position.Line, p.scanner.Position.Column)
+	return NewConfigArray(values), nil
 }
 
 func (p *Parser) extractConfigValue(currentRune rune) (ConfigValue, error) {
@@ -354,12 +346,9 @@ func (p *Parser) extractConfigValue(currentRune rune) (ConfigValue, error) {
 		configString := NewConfigString(strings.ReplaceAll(token, `"`, ""))
 		return configString, nil
 	case scanner.Ident:
-		switch {
-		case isBooleanString(token):
+		if isBooleanString(token) {
 			p.scanner.Scan()
 			return NewConfigBooleanFromString(token), nil
-		case isSubstitution(token, p.scanner.Peek()):
-			return p.extractSubstitution()
 		}
 	default:
 		switch {
@@ -367,9 +356,11 @@ func (p *Parser) extractConfigValue(currentRune rune) (ConfigValue, error) {
 			return p.extractConfigObject()
 		case token == arrayStartToken:
 			return p.extractConfigArray()
+		case isSubstitution(token, p.scanner.Peek()):
+			return p.extractSubstitution()
 		}
 	}
-	return nil, errors.New("unknown config value: " + token)
+	return nil, fmt.Errorf("unknown config value: %q", token)
 }
 
 func (p *Parser) extractSubstitution() (*Substitution, error) {
