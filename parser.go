@@ -36,7 +36,10 @@ type Parser struct {
 }
 
 func newParser(src io.Reader) *Parser {
-	return &Parser{new(scanner.Scanner).Init(src)}
+	s := new(scanner.Scanner)
+	s.Init(src)
+	s.Error = func(*scanner.Scanner, string) {} // do not print errors to stderr
+	return &Parser{scanner:s}
 }
 
 func ParseString(input string) (*Config, error) {
@@ -247,37 +250,56 @@ func (p *Parser) parsePlusEqualsValue(existingItems map[string]ConfigValue, key 
 	return nil
 }
 
-func (p *Parser) validateIncludeValue() (string, error) {
-	includeValue := p.scanner.TokenText()
-	if includeValue == "file" || includeValue == "classpath" {
+func (p *Parser) validateIncludeValue() (*IncludeToken, error) {
+	var required bool
+	token := p.scanner.TokenText()
+	if token == "required" {
+		required = true
 		p.scanner.Scan()
 		if p.scanner.TokenText() != "(" {
-			return "", errors.New("invalid include value! missing opening parenthesis")
+			return nil, errors.New("invalid include value! missing opening parenthesis")
+		}
+		p.scanner.Scan()
+		token = p.scanner.TokenText()
+	}
+	if token == "file" || token == "classpath" {
+		p.scanner.Scan()
+		if p.scanner.TokenText() != "(" {
+			return nil, errors.New("invalid include value! missing opening parenthesis")
 		}
 		p.scanner.Scan()
 		path := p.scanner.TokenText()
 		p.scanner.Scan()
 		if p.scanner.TokenText() != ")" {
-			return "", errors.New("invalid include value! missing closing parenthesis")
+			return nil, errors.New("invalid include value! missing closing parenthesis")
 		}
-		includeValue = path
+		token = path
 	}
-	if !strings.HasPrefix(includeValue, `"`) {
-		return "", errors.New(`invalid include value! expected quoted string, optionally wrapped in 'file(...)' or 'classpath(...)' `)
+
+	if required {
+		p.scanner.Scan()
+		if p.scanner.TokenText() != ")" {
+			return nil, errors.New("invalid include value! missing closing parenthesis")
+		}
 	}
-	return strings.ReplaceAll(includeValue, `"`, ""), nil
+
+	tokenLength := len(token)
+	if !strings.HasPrefix(token, `"`) || !strings.HasSuffix(token, `"`) || tokenLength < 2 {
+		return nil, errors.New(`invalid include value! expected quoted string, optionally wrapped in 'file(...)' or 'classpath(...)'`)
+	}
+	return &IncludeToken{path: token[1 : tokenLength-1], required: required}, nil // remove double quotes
 }
 
 func (p *Parser) parseIncludedResource() (*ConfigObject, error) {
-	path, err := p.validateIncludeValue()
+	includeToken, err := p.validateIncludeValue()
 	if err != nil {
 		return nil, err
 	}
-	file, err := os.Open(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return NewConfigObject(map[string]ConfigValue{}), nil
-	}
+	file, err := os.Open(includeToken.path)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) && !includeToken.required {
+			return NewConfigObject(map[string]ConfigValue{}), nil
+		}
 		return nil, fmt.Errorf("could not parse resource: %w", err)
 	}
 	includeParser := newParser(file)
@@ -424,4 +446,9 @@ func isSubstitution(token string, peekedToken rune) bool {
 
 func isSeparator(token string, peekedToken rune) bool {
 	return token == equalsToken || token == colonToken || (token == "+" && peekedToken == '=')
+}
+
+type IncludeToken struct {
+	path     string
+	required bool
 }

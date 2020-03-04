@@ -3,6 +3,7 @@ package hocon
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 )
@@ -527,69 +528,126 @@ func TestValidateIncludeValue(t *testing.T) {
 		parser := newParser(strings.NewReader("include file[abc.conf]"))
 		for ; parser.scanner.TokenText() != "file"; parser.scanner.Scan() {}
 		expectedError := errors.New("invalid include value! missing opening parenthesis")
-		path, err := parser.validateIncludeValue()
+		got, err := parser.validateIncludeValue()
 		assertError(t, err, expectedError)
-		assertEquals(t, path, "")
+		assertNil(t, got)
 	})
 
 	t.Run("return error if the include value starts with 'file' but closing parenthesis is missing", func(t *testing.T) {
 		parser := newParser(strings.NewReader("include file(abc.conf"))
 		for ; parser.scanner.TokenText() != "file"; parser.scanner.Scan() {}
 		expectedError := errors.New("invalid include value! missing closing parenthesis")
-		path, err := parser.validateIncludeValue()
+		got, err := parser.validateIncludeValue()
 		assertError(t, err, expectedError)
-		assertEquals(t, path, "")
+		assertNil(t, got)
 	})
 
 	t.Run("return error if the include value starts with 'classpath' but opening parenthesis is missing", func(t *testing.T) {
 		parser := newParser(strings.NewReader("include classpath[abc.conf]"))
 		for ; parser.scanner.TokenText() != "classpath"; parser.scanner.Scan() {}
 		expectedError := errors.New("invalid include value! missing opening parenthesis")
-		path, err := parser.validateIncludeValue()
+		got, err := parser.validateIncludeValue()
 		assertError(t, err, expectedError)
-		assertEquals(t, path, "")
+		assertNil(t, got)
 	})
 
 	t.Run("return error if the include value starts with 'classpath' but closing parenthesis is missing", func(t *testing.T) {
 		parser := newParser(strings.NewReader("include classpath(abc.conf"))
 		for ; parser.scanner.TokenText() != "classpath"; parser.scanner.Scan() {}
 		expectedError := errors.New("invalid include value! missing closing parenthesis")
-		path, err := parser.validateIncludeValue()
+		got, err := parser.validateIncludeValue()
 		assertError(t, err, expectedError)
-		assertEquals(t, path, "")
+		assertNil(t, got)
 	})
 
-	t.Run("return error if the include value is not a quoted string", func(t *testing.T) {
+	t.Run("return error if the include value does not start with double quotes", func(t *testing.T) {
 		parser := newParser(strings.NewReader("include abc.conf"))
 		for ; parser.scanner.TokenText() != "abc"; parser.scanner.Scan() {}
-		expectedError := errors.New(`invalid include value! expected quoted string, optionally wrapped in 'file(...)' or 'classpath(...)' `)
-		path, err := parser.validateIncludeValue()
+		expectedError := errors.New(`invalid include value! expected quoted string, optionally wrapped in 'file(...)' or 'classpath(...)'`)
+		got, err := parser.validateIncludeValue()
 		assertError(t, err, expectedError)
-		assertEquals(t, path, "")
+		assertNil(t, got)
+	})
+
+	t.Run("return error if the include value does not end with double quotes", func(t *testing.T) {
+		parser := newParser(strings.NewReader(`include "abc.conf`))
+		for ; parser.scanner.TokenText() != `"abc.conf`; parser.scanner.Scan() {}
+		expectedError := errors.New(`invalid include value! expected quoted string, optionally wrapped in 'file(...)' or 'classpath(...)'`)
+		got, err := parser.validateIncludeValue()
+		assertError(t, err, expectedError)
+		assertNil(t, got)
+	})
+
+	t.Run("return error if the include value is just a double quotes", func(t *testing.T) {
+		parser := newParser(strings.NewReader(`include "`))
+		for ; parser.scanner.TokenText() != `"`; parser.scanner.Scan() {}
+		expectedError := errors.New(`invalid include value! expected quoted string, optionally wrapped in 'file(...)' or 'classpath(...)'`)
+		got, err := parser.validateIncludeValue()
+		assertError(t, err, expectedError)
+		assertNil(t, got)
 	})
 	
 	t.Run("return the path with quotes removed", func(t *testing.T) {
 		parser := newParser(strings.NewReader(`include "abc.conf"`))
 		for ; parser.scanner.TokenText() != `"abc.conf"`; parser.scanner.Scan() {}
-		path, err := parser.validateIncludeValue()
+		expected := &IncludeToken{path:"abc.conf", required:false}
+		got, err := parser.validateIncludeValue()
 		assertNoError(t, err)
-		assertEquals(t, path, "abc.conf")
+		assertDeepEqual(t, got, expected)
 	})
 
-	t.Run("return the path in file(...) with quotes removed", func(t *testing.T) {
+	t.Run("return the include token containing the path in file(...) with quotes removed and required as 'false'", func(t *testing.T) {
 		parser := newParser(strings.NewReader(`include file("abc.conf")`))
 		for ; parser.scanner.TokenText() != "file"; parser.scanner.Scan() {}
-		path, err := parser.validateIncludeValue()
+		got, err := parser.validateIncludeValue()
+		expected := &IncludeToken{path:"abc.conf", required:false}
 		assertNoError(t, err)
-		assertEquals(t, path, "abc.conf")
+		assertDeepEqual(t, got, expected)
 	})
 
-	t.Run("return the path in classpath(...) with quotes removed", func(t *testing.T) {
+	t.Run("return the include token containing the path in classpath(...) with quotes removed and required as 'false'", func(t *testing.T) {
 		parser := newParser(strings.NewReader(`include classpath("abc.conf")`))
 		for ; parser.scanner.TokenText() != "classpath"; parser.scanner.Scan() {}
-		path, err := parser.validateIncludeValue()
+		expected := &IncludeToken{path:"abc.conf", required:false}
+		got, err := parser.validateIncludeValue()
 		assertNoError(t, err)
-		assertEquals(t, path, "abc.conf")
+		assertDeepEqual(t, got, expected)
+	})
+
+	t.Run("return error if the include value starts with 'required' but opening parenthesis is missing", func(t *testing.T) {
+		parser := newParser(strings.NewReader("include required[abc.conf]"))
+		for ; parser.scanner.TokenText() != "required"; parser.scanner.Scan() {}
+		expectedError := errors.New("invalid include value! missing opening parenthesis")
+		got, err := parser.validateIncludeValue()
+		assertError(t, err, expectedError)
+		assertNil(t, got)
+	})
+
+	t.Run("return error if the include value starts with 'required' but closing parenthesis is missing", func(t *testing.T) {
+		parser := newParser(strings.NewReader("include required(abc.conf"))
+		for ; parser.scanner.TokenText() != "required"; parser.scanner.Scan() {}
+		expectedError := errors.New("invalid include value! missing closing parenthesis")
+		got, err := parser.validateIncludeValue()
+		assertError(t, err, expectedError)
+		assertNil(t, got)
+	})
+
+	t.Run("return the include token containing the path in required(file(...)) with quotes removed, and required as 'true'", func(t *testing.T) {
+		parser := newParser(strings.NewReader(`include required(file("abc.conf"))`))
+		for ; parser.scanner.TokenText() != "required"; parser.scanner.Scan() {}
+		got, err := parser.validateIncludeValue()
+		expected := &IncludeToken{path:"abc.conf", required:true}
+		assertNoError(t, err)
+		assertDeepEqual(t, got, expected)
+	})
+
+	t.Run("return the include token containing the path in required(classpath(...)) with quotes removed and required as 'true'", func(t *testing.T) {
+		parser := newParser(strings.NewReader(`include required(classpath("abc.conf"))`))
+		for ; parser.scanner.TokenText() != "required"; parser.scanner.Scan() {}
+		expected := &IncludeToken{path:"abc.conf", required:true}
+		got, err := parser.validateIncludeValue()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, expected)
 	})
 }
 
@@ -597,18 +655,27 @@ func TestParseIncludedResource(t *testing.T) {
 	t.Run("return the error from the validateIncludeValue method if it returns an error", func(t *testing.T) {
 		parser := newParser(strings.NewReader("include abc.conf"))
 		for ; parser.scanner.TokenText() != "abc"; parser.scanner.Scan() {}
-		expectedError := errors.New(`invalid include value! expected quoted string, optionally wrapped in 'file(...)' or 'classpath(...)' `)
+		expectedError := errors.New(`invalid include value! expected quoted string, optionally wrapped in 'file(...)' or 'classpath(...)'`)
 		configObject, err := parser.parseIncludedResource()
 		assertError(t, err, expectedError)
 		assertNil(t, configObject)
 	})
 
-	t.Run("return an empty object if the file does not exist", func(t *testing.T) {
+	t.Run("return an empty object if the file does not exist and the include token is not required", func(t *testing.T) {
 		parser := newParser(strings.NewReader(`include "nonExistFile.conf"`))
 		for ; parser.scanner.TokenText() != `"nonExistFile.conf"`; parser.scanner.Scan() {}
 		configObject, err := parser.parseIncludedResource()
 		assertNil(t, err)
 		assertConfigEquals(t, configObject, "{}")
+	})
+
+	t.Run("return an error if the file does not exist but the include token is required", func(t *testing.T) {
+		parser := newParser(strings.NewReader(`include required("nonExistFile.conf")`))
+		for ; parser.scanner.TokenText() != "required"; parser.scanner.Scan() {}
+		expectedError := fmt.Errorf("could not parse resource: %w", &os.PathError{Op: "open", Path: "nonExistFile.conf", Err: errors.New("no such file or directory")})
+		configObject, err := parser.parseIncludedResource()
+		assertError(t, err, expectedError)
+		assertNil(t, configObject)
 	})
 
 	t.Run("return an error if the included file contains an array as the value", func(t *testing.T) {
