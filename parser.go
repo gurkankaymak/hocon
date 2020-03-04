@@ -290,7 +290,7 @@ func (p *Parser) validateIncludeValue() (*IncludeToken, error) {
 	return &IncludeToken{path: token[1 : tokenLength-1], required: required}, nil // remove double quotes
 }
 
-func (p *Parser) parseIncludedResource() (*ConfigObject, error) {
+func (p *Parser) parseIncludedResource() (includeObject *ConfigObject, err error) {
 	includeToken, err := p.validateIncludeValue()
 	if err != nil {
 		return nil, err
@@ -303,9 +303,13 @@ func (p *Parser) parseIncludedResource() (*ConfigObject, error) {
 		return nil, fmt.Errorf("could not parse resource: %w", err)
 	}
 	includeParser := newParser(file)
-	defer file.Close()
-	includeParser.scanner.Scan()
+	defer func() {
+		if closingErr := file.Close(); closingErr != nil {
+			err = closingErr
+		}
+	}()
 
+	includeParser.scanner.Scan()
 	if includeParser.scanner.TokenText() == arrayStartToken {
 		return nil, errors.New("invalid included file! included file cannot contain an array as the root value")
 	}
