@@ -265,3 +265,9 @@ func (s *Substitution) String() string {
 	builder.WriteString("}")
 	return builder.String()
 }
+
+type ConfigNull string
+const null ConfigNull = "null"
+
+func (c ConfigNull) ValueType() ValueType { return ValueTypeNull }
+func (c ConfigNull) String() string       { return string(null) }

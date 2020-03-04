@@ -372,6 +372,10 @@ func (p *Parser) extractConfigValue(currentRune rune) (ConfigValue, error) {
 		configString := NewConfigString(strings.ReplaceAll(token, `"`, ""))
 		return configString, nil
 	case scanner.Ident:
+		if token == string(null) {
+			p.scanner.Scan()
+			return null, nil
+		}
 		if isBooleanString(token) {
 			p.scanner.Scan()
 			return NewConfigBooleanFromString(token), nil
