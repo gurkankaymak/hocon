@@ -54,10 +54,10 @@ func (c *Config) GetInt(path string) int {
 		return 0
 	}
 	switch configValue := value.(type) {
-	case *ConfigInt:
-		return configValue.value
-	case *ConfigString:
-		intValue, err := strconv.Atoi(configValue.value)
+	case ConfigInt:
+		return int(configValue)
+	case ConfigString:
+		intValue, err := strconv.Atoi(string(configValue))
 		if err != nil {
 			panic(err)
 		}
@@ -73,10 +73,10 @@ func (c *Config) GetFloat32(path string) float32 {
 		return float32(0.0)
 	}
 	switch configValue := value.(type) {
-	case *ConfigFloat32:
-		return configValue.value
-	case *ConfigString:
-		floatValue, err := strconv.ParseFloat(configValue.value, 32)
+	case ConfigFloat32:
+		return float32(configValue)
+	case ConfigString:
+		floatValue, err := strconv.ParseFloat(string(configValue), 32)
 		if err != nil {
 			panic(err)
 		}
@@ -92,16 +92,16 @@ func (c *Config) GetBoolean(path string) bool {
 		return false
 	}
 	switch configValue := value.(type) {
-	case *ConfigBoolean:
-		return configValue.value
-	case *ConfigString:
-		switch configValue.value {
+	case ConfigBoolean:
+		return bool(configValue)
+	case ConfigString:
+		switch configValue {
 		case "true", "yes", "on":
 			return true
 		case "false", "no", "off":
 			return false
 		default:
-			panic("cannot parse value: " + configValue.value + " to boolean!")
+			panic("cannot parse value: " + configValue + " to boolean!")
 		}
 	default:
 		panic("cannot parse value: " + configValue.String() + " to boolean!")
@@ -121,15 +121,10 @@ type ConfigValue interface {
 	String() string
 }
 
-type ConfigString struct {
-	value string
-}
+type ConfigString string
 
-func NewConfigString(value string) *ConfigString { return &ConfigString{value: value} }
-
-func (c *ConfigString) ValueType() ValueType { return ValueTypeString }
-
-func (c *ConfigString) String() string { return c.value }
+func (c ConfigString) ValueType() ValueType { return ValueTypeString }
+func (c ConfigString) String() string       { return string(c) }
 
 type ConfigObject struct {
 	items map[string]ConfigValue
@@ -206,48 +201,34 @@ func (c *ConfigArray) Append(value ConfigValue) {
 	c.values = append(c.values, value)
 }
 
-type ConfigInt struct {
-	value int
+type ConfigInt int
+
+func (c ConfigInt) ValueType() ValueType { return ValueTypeNumber }
+func (c ConfigInt) String() string { return strconv.Itoa(int(c)) }
+
+type ConfigFloat32 float32
+
+func (c ConfigFloat32) ValueType() ValueType { return ValueTypeNumber }
+
+func (c ConfigFloat32) String() string {
+	return strconv.FormatFloat(float64(c), 'e', -1, 32)
 }
 
-func NewConfigInt(value int) *ConfigInt { return &ConfigInt{value: value} }
+type ConfigBoolean bool
 
-func (c *ConfigInt) ValueType() ValueType { return ValueTypeNumber }
-
-func (c *ConfigInt) String() string { return strconv.Itoa(c.value) }
-
-type ConfigFloat32 struct {
-	value float32
-}
-
-func NewConfigFloat32(value float32) *ConfigFloat32 { return &ConfigFloat32{value: value} }
-
-func (c *ConfigFloat32) ValueType() ValueType { return ValueTypeNumber }
-
-func (c *ConfigFloat32) String() string {
-	return strconv.FormatFloat(float64(c.value), 'e', -1, 32)
-}
-
-type ConfigBoolean struct {
-	value bool
-}
-
-func NewConfigBoolean(value bool) *ConfigBoolean { return &ConfigBoolean{value: value} }
-
-func NewConfigBooleanFromString(value string) *ConfigBoolean {
+func NewConfigBooleanFromString(value string) ConfigBoolean {
 	switch value {
 	case "true", "yes", "on":
-		return &ConfigBoolean{value: true}
+		return true
 	case "false", "no", "off":
-		return &ConfigBoolean{value: false}
+		return false
 	default:
 		panic("cannot parse value: " + value + " to boolean!")
 	}
 }
 
-func (c *ConfigBoolean) ValueType() ValueType { return ValueTypeBoolean }
-
-func (c *ConfigBoolean) String() string { return strconv.FormatBool(c.value) }
+func (c ConfigBoolean) ValueType() ValueType { return ValueTypeBoolean }
+func (c ConfigBoolean) String() string       { return strconv.FormatBool(bool(c)) }
 
 type Substitution struct {
 	path     string
@@ -276,4 +257,4 @@ func (c ConfigNull) String() string       { return string(null) }
 type ConfigDuration time.Duration
 
 func (d ConfigDuration) ValueType() ValueType { return ValueTypeString }
-func (d ConfigDuration) String() string { return time.Duration(d).String() }
+func (d ConfigDuration) String() string       { return time.Duration(d).String() }

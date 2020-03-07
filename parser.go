@@ -376,7 +376,7 @@ func (p *Parser) extractConfigValue(currentRune rune) (ConfigValue, error) {
 		if advanceScanner {
 			p.scanner.Scan()
 		}
-		return NewConfigInt(value), nil
+		return ConfigInt(value), nil
 	case scanner.Float:
 		value, err := strconv.ParseFloat(token, 32)
 		if err != nil {
@@ -390,11 +390,10 @@ func (p *Parser) extractConfigValue(currentRune rune) (ConfigValue, error) {
 		if advanceScanner {
 			p.scanner.Scan()
 		}
-		return NewConfigFloat32(float32(value)), nil
+		return ConfigFloat32(value), nil
 	case scanner.String:
 		p.scanner.Scan()
-		configString := NewConfigString(strings.ReplaceAll(token, `"`, ""))
-		return configString, nil
+		return ConfigString(strings.ReplaceAll(token, `"`, "")), nil
 	case scanner.Ident:
 		if token == string(null) {
 			p.scanner.Scan()
