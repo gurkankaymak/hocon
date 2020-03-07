@@ -79,25 +79,25 @@ func (p *Parser) parse() (*Config, error) {
 	return &Config{root: object}, nil
 }
 
-func resolveSubstitutions(root Object, configValueOptional ...ConfigValue) error {
-	var configValue ConfigValue
-	if configValueOptional == nil {
-		configValue = root
+func resolveSubstitutions(root Object, valueOptional ...Value) error {
+	var value Value
+	if valueOptional == nil {
+		value = root
 	} else {
-		configValue = configValueOptional[0]
+		value = valueOptional[0]
 	}
 
-	switch v := configValue.(type) {
+	switch v := value.(type) {
 	case Array:
 		for i, value := range v {
-			err := processSubstitution(root, value, func(foundValue ConfigValue) { v[i] = foundValue })
+			err := processSubstitution(root, value, func(foundValue Value) { v[i] = foundValue })
 			if err != nil {
 				return err
 			}
 		}
 	case Object:
 		for key, value := range v {
-			err := processSubstitution(root, value, func(foundValue ConfigValue) { v[key] = foundValue })
+			err := processSubstitution(root, value, func(foundValue Value) { v[key] = foundValue })
 			if err != nil {
 				return err
 			}
@@ -108,15 +108,15 @@ func resolveSubstitutions(root Object, configValueOptional ...ConfigValue) error
 	return nil
 }
 
-func processSubstitution(root Object, value ConfigValue, resolveFunc func(configValue ConfigValue)) error {
-	if value.ValueType() == ValueTypeSubstitution {
+func processSubstitution(root Object, value Value, resolveFunc func(value Value)) error {
+	if value.Type() == SubstitutionType {
 		substitution := value.(*Substitution)
 		if foundValue := root.find(substitution.path); foundValue != nil {
 			resolveFunc(foundValue)
 		} else if !substitution.optional {
 			return errors.New("could not resolve substitution: " + substitution.String() + " to a value")
 		}
-	} else if valueType := value.ValueType(); valueType == ValueTypeObject || valueType == ValueTypeArray {
+	} else if valueType := value.Type(); valueType == ObjectType || valueType == ArrayType {
 		return resolveSubstitutions(root, value)
 	}
 	return nil
@@ -180,18 +180,18 @@ func (p *Parser) extractObject() (Object, error) {
 		switch text {
 		case equalsToken, colonToken:
 			currentRune := p.scanner.Scan()
-			configValue, err := p.extractConfigValue(currentRune)
+			value, err := p.extractValue(currentRune)
 			if err != nil {
 				return nil, err
 			}
 
-			if object, ok := configValue.(Object); ok {
+			if object, ok := value.(Object); ok {
 				if existingObject, ok := root[key].(Object); ok {
 					mergeObjects(existingObject, object)
-					configValue = existingObject
+					value = existingObject
 				}
 			}
-			root[key] = configValue
+			root[key] = value
 		case "+" :
 			if p.scanner.Peek() == '=' {
 				p.scanner.Scan()
@@ -223,7 +223,7 @@ func (p *Parser) extractObject() (Object, error) {
 func mergeObjects(existing Object, new Object) {
 	for key, value := range new {
 		existingValue, ok := existing[key]
-		if ok && existingValue.ValueType() == ValueTypeObject && value.ValueType() == ValueTypeObject {
+		if ok && existingValue.Type() == ObjectType && value.Type() == ObjectType {
 			existingObj := existingValue.(Object)
 			mergeObjects(existingObj, value.(Object))
 			value = existingObj
@@ -235,21 +235,20 @@ func mergeObjects(existing Object, new Object) {
 func (p *Parser) parsePlusEqualsValue(existingObject Object, key string, currentRune rune) error {
 	existingValue, ok := existingObject[key]
 	if !ok {
-		configValue, err := p.extractConfigValue(currentRune)
+		value, err := p.extractValue(currentRune)
 		if err != nil {
 			return err
 		}
-		existingObject[key] = Array{configValue}
+		existingObject[key] = Array{value}
 	} else {
-		existingArray, ok := existingValue.(Array)
-		if !ok {
+		if existingValue.Type() != ArrayType {
 			return invalidValueError(fmt.Sprintf("value: %q of the key: %q is not an array", existingValue.String(), key), p.scanner.Position.Line, p.scanner.Pos().Column)
 		}
-		configValue, err := p.extractConfigValue(currentRune)
+		value, err := p.extractValue(currentRune)
 		if err != nil {
 			return err
 		}
-		existingObject[key] = append(existingArray, configValue)
+		existingObject[key] = append(existingValue.(Array), value)
 	}
 	return nil
 }
@@ -333,11 +332,11 @@ func (p *Parser) extractArray() (Array, error) {
 		return array, nil
 	}
 	for tok := p.scanner.Peek() ; tok != scanner.EOF; tok = p.scanner.Peek() {
-		configValue, err := p.extractConfigValue(currentRune)
+		value, err := p.extractValue(currentRune)
 		if err != nil {
 			return nil, err
 		}
-		array = append(array, configValue)
+		array = append(array, value)
 		if p.scanner.TokenText() == commaToken {
 			currentRune = p.scanner.Scan() // skip comma
 		}
@@ -354,7 +353,7 @@ func (p *Parser) extractArray() (Array, error) {
 	return array, nil
 }
 
-func (p *Parser) extractConfigValue(currentRune rune) (ConfigValue, error) {
+func (p *Parser) extractValue(currentRune rune) (Value, error) {
 	token := p.scanner.TokenText()
 	if token == commentToken {
 		currentRune = p.consumeComment()
@@ -411,7 +410,7 @@ func (p *Parser) extractConfigValue(currentRune rune) (ConfigValue, error) {
 			return p.extractSubstitution()
 		}
 	}
-	return nil, invalidValueError(fmt.Sprintf("unknown config value: %q", token), p.scanner.Position.Line, p.scanner.Position.Column)
+	return nil, invalidValueError(fmt.Sprintf("unknown value: %q", token), p.scanner.Position.Line, p.scanner.Position.Column)
 }
 
 func (p *Parser) extractDurationUnit() (time.Duration, bool) {

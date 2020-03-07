@@ -1,7 +1,6 @@
 package hocon
 
 import (
-	"fmt"
 	"reflect"
 	"testing"
 )
@@ -32,13 +31,6 @@ func assertPanic(t *testing.T, fn func(), expectedMessage ...string) {
 		}
 	}()
 	fn()
-}
-
-func assertConfigEquals(t *testing.T, got fmt.Stringer, expected string) {
-	t.Helper()
-	if got.String() != expected {
-		fail(t, got, expected)
-	}
 }
 
 func assertNoError(t *testing.T, err error) {

@@ -4,15 +4,15 @@ import (
 	"testing"
 )
 
-func TestGetConfigObject(t *testing.T) {
+func TestGetObject(t *testing.T) {
 	config, _ := ParseString(`{a:{b:"c"}, d:[]}`)
 
-	t.Run("get config object", func(t *testing.T) {
+	t.Run("get object", func(t *testing.T) {
 		got := config.GetObject("a")
-		assertConfigEquals(t, got, "{b:c}")
+		assertDeepEqual(t, got, Object{"b": String("c")})
 	})
 
-	t.Run("return nil for a non-existing config object", func(t *testing.T) {
+	t.Run("return nil for a non-existing object", func(t *testing.T) {
 		got := config.GetObject("e")
 		if got != nil {
 			t.Errorf("expected: nil, got: %v", got)
@@ -24,15 +24,15 @@ func TestGetConfigObject(t *testing.T) {
 	})
 }
 
-func TestGetConfigArray(t *testing.T) {
+func TestGetArray(t *testing.T) {
 	config, _ := ParseString(`{a: [1, 2], b: {c: "d"}}`)
 
-	t.Run("get config array", func(t *testing.T) {
+	t.Run("get array", func(t *testing.T) {
 		got := config.GetArray("a")
-		assertConfigEquals(t, got, "[1,2]")
+		assertDeepEqual(t, got, Array{Int(1), Int(2)})
 	})
 
-	t.Run("return nil for a non-existing config array", func(t *testing.T) {
+	t.Run("return nil for a non-existing array", func(t *testing.T) {
 		got := config.GetArray("e")
 		if got != nil {
 			t.Errorf("expected: nil, got: %v", got)
@@ -51,7 +51,7 @@ func TestGetString(t *testing.T) {
 		assertEquals(t, config.GetString("a"), "b")
 	})
 
-	t.Run("return zero value(empty string) for a non-existing config string", func(t *testing.T) {
+	t.Run("return zero value(empty string) for a non-existing string", func(t *testing.T) {
 		assertEquals(t, config.GetString("d"), "")
 	})
 
@@ -67,7 +67,7 @@ func TestGetInt(t *testing.T) {
 		assertEquals(t, config.GetInt("c"), 2)
 	})
 
-	t.Run("return zero for a non-existing config int", func(t *testing.T) {
+	t.Run("return zero for a non-existing int", func(t *testing.T) {
 		assertEquals(t, config.GetInt("e"), 0)
 	})
 
@@ -91,7 +91,7 @@ func TestGetFloat32(t *testing.T) {
 		assertEquals(t, config.GetFloat32("c"), float32(2.4))
 	})
 
-	t.Run("return float32(0.0) for a non-existing config float32", func(t *testing.T) {
+	t.Run("return float32(0.0) for a non-existing float32", func(t *testing.T) {
 		assertEquals(t, config.GetFloat32("e"), float32(0.0))
 	})
 
