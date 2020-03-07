@@ -11,8 +11,6 @@ import (
 	"time"
 )
 
-//type TokenType string
-
 const (
 	equalsToken      = "="
 	commaToken       = ","
@@ -29,7 +27,7 @@ const (
 
 var forbiddenCharacters = map[string]bool{
 	"$": true, `"`: true, objectStartToken: true, objectEndToken: true, arrayStartToken: true, arrayEndToken: true,
-	colonToken: true, equalsToken: true, commaToken: true, "+": true, "#": true, "`": true, "^": true, "?": true,
+	colonToken: true, equalsToken: true, commaToken: true, "+": true, commentToken: true, "`": true, "^": true, "?": true,
 	"!": true, "@": true, "*": true, "&": true, `\`: true, "(": true, ")": true,
 }
 
@@ -60,28 +58,28 @@ func ParseResource(path string) (*Config, error) {
 func (p *Parser) parse() (*Config, error) {
 	p.scanner.Scan()
 	if p.scanner.TokenText() == arrayStartToken {
-		configArray, err := p.extractConfigArray()
+		array, err := p.extractArray()
 		if err != nil {
 			return nil, err
 		}
-		return &Config{root:configArray}, nil
+		return &Config{root: array}, nil
 	}
 
-	configObject, err := p.extractConfigObject()
+	object, err := p.extractObject()
 	if err != nil {
 		return nil, err
 	}
 	if token := p.scanner.TokenText(); token != "" {
-		return nil, invalidConfigObjectError("invalid token " + token, p.scanner.Position.Line, p.scanner.Column)
+		return nil, invalidObjectError("invalid token " + token, p.scanner.Position.Line, p.scanner.Column)
 	}
-	err = resolveSubstitutions(configObject)
+	err = resolveSubstitutions(object)
 	if err != nil {
 		return nil, err
 	}
-	return &Config{root:configObject}, nil
+	return &Config{root: object}, nil
 }
 
-func resolveSubstitutions(root ConfigObject, configValueOptional ...ConfigValue) error {
+func resolveSubstitutions(root Object, configValueOptional ...ConfigValue) error {
 	var configValue ConfigValue
 	if configValueOptional == nil {
 		configValue = root
@@ -90,14 +88,14 @@ func resolveSubstitutions(root ConfigObject, configValueOptional ...ConfigValue)
 	}
 
 	switch v := configValue.(type) {
-	case ConfigArray:
+	case Array:
 		for i, value := range v {
 			err := processSubstitution(root, value, func(foundValue ConfigValue) { v[i] = foundValue })
 			if err != nil {
 				return err
 			}
 		}
-	case ConfigObject:
+	case Object:
 		for key, value := range v {
 			err := processSubstitution(root, value, func(foundValue ConfigValue) { v[key] = foundValue })
 			if err != nil {
@@ -110,7 +108,7 @@ func resolveSubstitutions(root ConfigObject, configValueOptional ...ConfigValue)
 	return nil
 }
 
-func processSubstitution(root ConfigObject, value ConfigValue, resolveFunc func(configValue ConfigValue)) error {
+func processSubstitution(root Object, value ConfigValue, resolveFunc func(configValue ConfigValue)) error {
 	if value.ValueType() == ValueTypeSubstitution {
 		substitution := value.(*Substitution)
 		if foundValue := root.find(substitution.path); foundValue != nil {
@@ -124,8 +122,8 @@ func processSubstitution(root ConfigObject, value ConfigValue, resolveFunc func(
 	return nil
 }
 
-func (p *Parser) extractConfigObject() (ConfigObject, error) {
-	root := ConfigObject{}
+func (p *Parser) extractObject() (Object, error) {
+	root := Object{}
 	parenthesisBalanced := true
 
 	if p.scanner.TokenText() == objectStartToken {
@@ -144,11 +142,11 @@ func (p *Parser) extractConfigObject() (ConfigObject, error) {
 
 		if p.scanner.TokenText() == includeToken {
 			p.scanner.Scan()
-			includedConfigObject, err := p.parseIncludedResource()
+			includedObject, err := p.parseIncludedResource()
 			if err != nil {
 				return nil, err
 			}
-			mergeConfigObjects(root, includedConfigObject)
+			mergeObjects(root, includedObject)
 			p.scanner.Scan()
 		}
 
@@ -172,11 +170,11 @@ func (p *Parser) extractConfigObject() (ConfigObject, error) {
 					return nil, trailingPeriodError(p.scanner.Position.Line, p.scanner.Position.Column - 1)
 				}
 			}
-			configObject, err := p.extractConfigObject()
+			object, err := p.extractObject()
 			if err != nil {
 				return nil, err
 			}
-			root[key] = configObject
+			root[key] = object
 		}
 
 		switch text {
@@ -187,10 +185,10 @@ func (p *Parser) extractConfigObject() (ConfigObject, error) {
 				return nil, err
 			}
 
-			if configObject, ok := configValue.(ConfigObject); ok {
-				if existingConfigObject, ok := root[key].(ConfigObject); ok {
-					mergeConfigObjects(existingConfigObject, configObject)
-					configValue = existingConfigObject
+			if object, ok := configValue.(Object); ok {
+				if existingObject, ok := root[key].(Object); ok {
+					mergeObjects(existingObject, object)
+					configValue = existingObject
 				}
 			}
 			root[key] = configValue
@@ -217,33 +215,33 @@ func (p *Parser) extractConfigObject() (ConfigObject, error) {
 	}
 
 	if !parenthesisBalanced {
-		return nil, invalidConfigObjectError("parenthesis do not match", p.scanner.Position.Line, p.scanner.Position.Column)
+		return nil, invalidObjectError("parenthesis do not match", p.scanner.Position.Line, p.scanner.Position.Column)
 	}
 	return root, nil
 }
 
-func mergeConfigObjects(existing ConfigObject, new ConfigObject) {
+func mergeObjects(existing Object, new Object) {
 	for key, value := range new {
 		existingValue, ok := existing[key]
 		if ok && existingValue.ValueType() == ValueTypeObject && value.ValueType() == ValueTypeObject {
-			existingObj := existingValue.(ConfigObject)
-			mergeConfigObjects(existingObj, value.(ConfigObject))
+			existingObj := existingValue.(Object)
+			mergeObjects(existingObj, value.(Object))
 			value = existingObj
 		}
 		existing[key] = value
 	}
 }
 
-func (p *Parser) parsePlusEqualsValue(existingObject ConfigObject, key string, currentRune rune) error {
+func (p *Parser) parsePlusEqualsValue(existingObject Object, key string, currentRune rune) error {
 	existingValue, ok := existingObject[key]
 	if !ok {
 		configValue, err := p.extractConfigValue(currentRune)
 		if err != nil {
 			return err
 		}
-		existingObject[key] = ConfigArray{configValue}
+		existingObject[key] = Array{configValue}
 	} else {
-		existingArray, ok := existingValue.(ConfigArray)
+		existingArray, ok := existingValue.(Array)
 		if !ok {
 			return invalidValueError(fmt.Sprintf("value: %q of the key: %q is not an array", existingValue.String(), key), p.scanner.Position.Line, p.scanner.Pos().Column)
 		}
@@ -296,7 +294,7 @@ func (p *Parser) validateIncludeValue() (*IncludeToken, error) {
 	return &IncludeToken{path: token[1 : tokenLength-1], required: required}, nil // remove double quotes
 }
 
-func (p *Parser) parseIncludedResource() (includeObject ConfigObject, err error) {
+func (p *Parser) parseIncludedResource() (includeObject Object, err error) {
 	includeToken, err := p.validateIncludeValue()
 	if err != nil {
 		return nil, err
@@ -304,7 +302,7 @@ func (p *Parser) parseIncludedResource() (includeObject ConfigObject, err error)
 	file, err := os.Open(includeToken.path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) && !includeToken.required {
-			return ConfigObject{}, nil
+			return Object{}, nil
 		}
 		return nil, fmt.Errorf("could not parse resource: %w", err)
 	}
@@ -320,14 +318,14 @@ func (p *Parser) parseIncludedResource() (includeObject ConfigObject, err error)
 		return nil, invalidValueError("included file cannot contain an array as the root value", p.scanner.Position.Line, p.scanner.Position.Column)
 	}
 
-	return includeParser.extractConfigObject()
+	return includeParser.extractObject()
 }
 
-func (p *Parser) extractConfigArray() (ConfigArray, error) {
+func (p *Parser) extractArray() (Array, error) {
 	if firstToken := p.scanner.TokenText(); firstToken != arrayStartToken {
-		return nil, invalidConfigArrayError(fmt.Sprintf("%q is not an array start token", firstToken), p.scanner.Position.Line, p.scanner.Position.Column)
+		return nil, invalidArrayError(fmt.Sprintf("%q is not an array start token", firstToken), p.scanner.Position.Line, p.scanner.Position.Column)
 	}
-	var array ConfigArray
+	var array Array
 	parenthesisBalanced := false
 	currentRune := p.scanner.Scan()
 	if p.scanner.TokenText() == arrayEndToken { // empty array
@@ -351,7 +349,7 @@ func (p *Parser) extractConfigArray() (ConfigArray, error) {
 		}
 	}
 	if !parenthesisBalanced {
-		return nil, invalidConfigArrayError("parenthesis do not match", p.scanner.Position.Line, p.scanner.Position.Column)
+		return nil, invalidArrayError("parenthesis do not match", p.scanner.Position.Line, p.scanner.Position.Column)
 	}
 	return array, nil
 }
@@ -371,12 +369,12 @@ func (p *Parser) extractConfigValue(currentRune rune) (ConfigValue, error) {
 		durationUnit, advanceScanner := p.extractDurationUnit()
 		if durationUnit != 0 {
 			p.scanner.Scan()
-			return ConfigDuration(time.Duration(value) * durationUnit), nil
+			return Duration(time.Duration(value) * durationUnit), nil
 		}
 		if advanceScanner {
 			p.scanner.Scan()
 		}
-		return ConfigInt(value), nil
+		return Int(value), nil
 	case scanner.Float:
 		value, err := strconv.ParseFloat(token, 32)
 		if err != nil {
@@ -385,15 +383,15 @@ func (p *Parser) extractConfigValue(currentRune rune) (ConfigValue, error) {
 		durationUnit, advanceScanner := p.extractDurationUnit()
 		if durationUnit != 0 {
 			p.scanner.Scan()
-			return ConfigDuration(time.Duration(value) * durationUnit), nil
+			return Duration(time.Duration(value) * durationUnit), nil
 		}
 		if advanceScanner {
 			p.scanner.Scan()
 		}
-		return ConfigFloat32(value), nil
+		return Float32(value), nil
 	case scanner.String:
 		p.scanner.Scan()
-		return ConfigString(strings.ReplaceAll(token, `"`, "")), nil
+		return String(strings.ReplaceAll(token, `"`, "")), nil
 	case scanner.Ident:
 		if token == string(null) {
 			p.scanner.Scan()
@@ -401,14 +399,14 @@ func (p *Parser) extractConfigValue(currentRune rune) (ConfigValue, error) {
 		}
 		if isBooleanString(token) {
 			p.scanner.Scan()
-			return NewConfigBooleanFromString(token), nil
+			return NewBooleanFromString(token), nil
 		}
 	default:
 		switch {
 		case token == objectStartToken:
-			return p.extractConfigObject()
+			return p.extractObject()
 		case token == arrayStartToken:
-			return p.extractConfigArray()
+			return p.extractArray()
 		case isSubstitution(token, p.scanner.Peek()):
 			return p.extractSubstitution()
 		}

@@ -33,11 +33,11 @@ func invalidSubstitutionError(message string, line, column int) *ParseError {
 	return parseError("invalid substitution!", message, line, column)
 }
 
-func invalidConfigArrayError(message string, line, column int) *ParseError {
+func invalidArrayError(message string, line, column int) *ParseError {
 	return parseError("invalid config array!", message, line, column)
 }
 
-func invalidConfigObjectError(message string, line, column int) *ParseError {
+func invalidObjectError(message string, line, column int) *ParseError {
 	return parseError("invalid config object!", message, line, column)
 }
 

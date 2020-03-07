@@ -24,9 +24,9 @@ func TestParseResource(t *testing.T) {
 }
 
 func TestParse(t *testing.T) {
-	t.Run("try to parse as config array if the input starts with '[' and return the error from extractConfigArray if any", func(t *testing.T) {
+	t.Run("try to parse as config array if the input starts with '[' and return the error from extractArray if any", func(t *testing.T) {
 		parser := newParser(strings.NewReader("[5}"))
-		expectedError := invalidConfigArrayError("parenthesis do not match", 1, 3)
+		expectedError := invalidArrayError("parenthesis do not match", 1, 3)
 		got, err := parser.parse()
 		assertError(t, err, expectedError)
 		assertNil(t, got)
@@ -40,17 +40,17 @@ func TestParse(t *testing.T) {
 		assertConfigEquals(t, got, testConfig)
 	})
 
-	t.Run("return the same error if any error occurs in the extractConfigObject method", func(t *testing.T) {
+	t.Run("return the same error if any error occurs in the extractObject method", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a:5]"))
-		expectedError := invalidConfigObjectError("parenthesis do not match", 1, 5)
+		expectedError := invalidObjectError("parenthesis do not match", 1, 5)
 		got, err := parser.parse()
 		assertError(t, err, expectedError)
 		assertNil(t, got)
 	})
 
-	t.Run("return an invalidConfigObject error if the EOF is not reached after extractConfigObject method returns", func(t *testing.T) {
+	t.Run("return an invalidObjectError if the EOF is not reached after extractObject method returns", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a:{b:1}bb"))
-		expectedError := invalidConfigObjectError("invalid token bb", 1, 8)
+		expectedError := invalidObjectError("invalid token bb", 1, 8)
 		got, err := parser.parse()
 		assertError(t, err, expectedError)
 		assertNil(t, got)
@@ -64,7 +64,7 @@ func TestParse(t *testing.T) {
 		assertNil(t, got)
 	})
 
-	t.Run("parse as config object if the input does not start with '['", func(t *testing.T) {
+	t.Run("parse as object if the input does not start with '['", func(t *testing.T) {
 		testConfig := "{a:42}"
 		parser := newParser(strings.NewReader(testConfig))
 		got, err := parser.parse()
@@ -110,27 +110,27 @@ func TestParse(t *testing.T) {
 	})
 }
 
-func TestExtractConfigObject(t *testing.T) {
-	t.Run("extract empty config object", func(t *testing.T) {
+func TestExtractObject(t *testing.T) {
+	t.Run("extract empty object", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{}"))
 		parser.scanner.Scan() // move scanner to the first token for the test case
-		got, err := parser.extractConfigObject()
+		got, err := parser.extractObject()
 		assertNoError(t, err)
 		assertConfigEquals(t, got, "{}")
 	})
 
-	t.Run("extract config object with the root braces omitted", func(t *testing.T) {
+	t.Run("extract object with the root braces omitted", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a=1"))
 		parser.scanner.Scan()
-		got, err := parser.extractConfigObject()
+		got, err := parser.extractObject()
 		assertNoError(t, err)
 		assertConfigEquals(t, got, "{a:1}")
 	})
 
-	t.Run("extract simple config object", func(t *testing.T) {
+	t.Run("extract simple object", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a=1}"))
 		parser.scanner.Scan()
-		got, err := parser.extractConfigObject()
+		got, err := parser.extractObject()
 		assertNoError(t, err)
 		assertConfigEquals(t, got, "{a:1}")
 	})
@@ -139,16 +139,16 @@ func TestExtractConfigObject(t *testing.T) {
 		parser := newParser(strings.NewReader(`{include "testdata/array.conf"}`))
 		parser.scanner.Scan()
 		expectedErr := invalidValueError("included file cannot contain an array as the root value", 1, 10)
-		got, err := parser.extractConfigObject()
+		got, err := parser.extractObject()
 		assertError(t, err, expectedErr)
 		assertNil(t, got)
 	})
 
-	t.Run("merge the included config object with the existing", func(t *testing.T) {
+	t.Run("merge the included object with the existing", func(t *testing.T) {
 		parser := newParser(strings.NewReader(`b:2 include "testdata/a.conf"`))
 		parser.scanner.Scan()
-		expected := ConfigObject{"a": ConfigInt(1), "b": ConfigInt(2)}
-		got, err := parser.extractConfigObject()
+		expected := Object{"a": Int(1), "b": Int(2)}
+		got, err := parser.extractObject()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, expected)
 	})
@@ -159,7 +159,7 @@ func TestExtractConfigObject(t *testing.T) {
 				parser := newParser(strings.NewReader(fmt.Sprintf("{%s:1}", forbiddenChar)))
 				parser.scanner.Scan()
 				expectedError := invalidKeyError(forbiddenChar, 1, 2)
-				got, err := parser.extractConfigObject()
+				got, err := parser.extractObject()
 				assertError(t, err, expectedError)
 				assertNil(t, got)
 			}
@@ -170,7 +170,7 @@ func TestExtractConfigObject(t *testing.T) {
 		parser := newParser(strings.NewReader("{.a:1}"))
 		parser.scanner.Scan()
 		expectedError := leadingPeriodError(1, 2)
-		got, err := parser.extractConfigObject()
+		got, err := parser.extractObject()
 		assertError(t, err, expectedError)
 		assertNil(t, got)
 	})
@@ -179,7 +179,7 @@ func TestExtractConfigObject(t *testing.T) {
 		parser := newParser(strings.NewReader("{a..b:1}"))
 		parser.scanner.Scan()
 		expectedError := adjacentPeriodsError(1, 4)
-		got, err := parser.extractConfigObject()
+		got, err := parser.extractObject()
 		assertError(t, err, expectedError)
 		assertNil(t, got)
 	})
@@ -188,25 +188,25 @@ func TestExtractConfigObject(t *testing.T) {
 		parser := newParser(strings.NewReader("{a.:1}"))
 		parser.scanner.Scan()
 		expectedError := trailingPeriodError(1, 3)
-		got, err := parser.extractConfigObject()
+		got, err := parser.extractObject()
 		assertError(t, err, expectedError)
 		assertNil(t, got)
 	})
 
-	t.Run("return the error if any error occurs while extracting the sub-config object (with object start token after key)", func(t *testing.T) {
+	t.Run("return the error if any error occurs while extracting the sub-object (with object start token after key)", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a{.b:1}}"))
 		parser.scanner.Scan()
 		expectedError := leadingPeriodError(1, 4)
-		got, err := parser.extractConfigObject()
+		got, err := parser.extractObject()
 		assertError(t, err, expectedError)
 		assertNil(t, got)
 	})
 
-	t.Run("return the error if any error occurs while extracting the sub-config object (with path expression as key)", func(t *testing.T) {
+	t.Run("return the error if any error occurs while extracting the sub-object (with path expression as key)", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a.b.:1}"))
 		parser.scanner.Scan()
 		expectedError := trailingPeriodError(1, 5)
-		got, err := parser.extractConfigObject()
+		got, err := parser.extractObject()
 		assertError(t, err, expectedError)
 		assertNil(t, got)
 	})
@@ -215,7 +215,7 @@ func TestExtractConfigObject(t *testing.T) {
 		parser := newParser(strings.NewReader("{a=b}"))
 		parser.scanner.Scan()
 		expectedError := invalidValueError(fmt.Sprintf("unknown config value: %q", "b"), 1, 4)
-		got, err := parser.extractConfigObject()
+		got, err := parser.extractObject()
 		assertError(t, err, expectedError)
 		assertNil(t, got)
 	})
@@ -223,8 +223,8 @@ func TestExtractConfigObject(t *testing.T) {
 	t.Run("return merged object if the current value (after equals separator) is object and there is an existing object with the same key", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a={b:1},a={c:2}}"))
 		parser.scanner.Scan()
-		expected := ConfigObject{"a": ConfigObject{"b": ConfigInt(1), "c": ConfigInt(2)}}
-		got, err := parser.extractConfigObject()
+		expected := Object{"a": Object{"b": Int(1), "c": Int(2)}}
+		got, err := parser.extractObject()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, expected)
 	})
@@ -232,8 +232,8 @@ func TestExtractConfigObject(t *testing.T) {
 	t.Run("override the existing value if the current value (after equals separator) is object and there is an existing non-object with the same key", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a=1,a={c:2}}"))
 		parser.scanner.Scan()
-		expected := ConfigObject{"a": ConfigObject{"c": ConfigInt(2)}}
-		got, err := parser.extractConfigObject()
+		expected := Object{"a": Object{"c": Int(2)}}
+		got, err := parser.extractObject()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, expected)
 	})
@@ -241,8 +241,8 @@ func TestExtractConfigObject(t *testing.T) {
 	t.Run("override the existing value if the current value (after equals separator) is not object", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a={b:1},a=2}"))
 		parser.scanner.Scan()
-		expected := ConfigObject{"a": ConfigInt(2)}
-		got, err := parser.extractConfigObject()
+		expected := Object{"a": Int(2)}
+		got, err := parser.extractObject()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, expected)
 	})
@@ -251,7 +251,7 @@ func TestExtractConfigObject(t *testing.T) {
 		parser := newParser(strings.NewReader("{a:b}"))
 		parser.scanner.Scan()
 		expectedError := invalidValueError(fmt.Sprintf("unknown config value: %q", "b"), 1, 4)
-		got, err := parser.extractConfigObject()
+		got, err := parser.extractObject()
 		assertError(t, err, expectedError)
 		assertNil(t, got)
 	})
@@ -259,8 +259,8 @@ func TestExtractConfigObject(t *testing.T) {
 	t.Run("return merged object if the current value (after colon separator) is object and there is an existing object with the same key", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a:{b:1},a:{c:2}}"))
 		parser.scanner.Scan()
-		expected := ConfigObject{"a": ConfigObject{"b": ConfigInt(1), "c": ConfigInt(2)}}
-		got, err := parser.extractConfigObject()
+		expected := Object{"a": Object{"b": Int(1), "c": Int(2)}}
+		got, err := parser.extractObject()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, expected)
 	})
@@ -268,8 +268,8 @@ func TestExtractConfigObject(t *testing.T) {
 	t.Run("override the existing value if the current value (after colon separator) is object and there is an existing non-object with the same key", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a:1,a:{c:2}}"))
 		parser.scanner.Scan()
-		expected := ConfigObject{"a": ConfigObject{"c": ConfigInt(2)}}
-		got, err := parser.extractConfigObject()
+		expected := Object{"a": Object{"c": Int(2)}}
+		got, err := parser.extractObject()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, expected)
 	})
@@ -277,8 +277,8 @@ func TestExtractConfigObject(t *testing.T) {
 	t.Run("override the existing value if the current value (after colon separator) is not object", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a:{b:1},a:2}"))
 		parser.scanner.Scan()
-		expected := ConfigObject{"a": ConfigInt(2)}
-		got, err := parser.extractConfigObject()
+		expected := Object{"a": Int(2)}
+		got, err := parser.extractObject()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, expected)
 	})
@@ -287,16 +287,16 @@ func TestExtractConfigObject(t *testing.T) {
 		parser := newParser(strings.NewReader("{a:1,a+=2}"))
 		parser.scanner.Scan()
 		expectedError := invalidValueError(fmt.Sprintf("value: %q of the key: %q is not an array", "1", "a"), 1, 10)
-		got, err := parser.extractConfigObject()
+		got, err := parser.extractObject()
 		assertError(t, err, expectedError)
 		assertNil(t, got)
 	})
 
-	t.Run("extract config object with the += separator", func(t *testing.T) {
+	t.Run("extract object with the += separator", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a+=1}"))
 		parser.scanner.Scan()
-		expected := ConfigObject{"a": ConfigArray{ConfigInt(1)}}
-		got, err := parser.extractConfigObject()
+		expected := Object{"a": Array{Int(1)}}
+		got, err := parser.extractObject()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, expected)
 	})
@@ -305,102 +305,102 @@ func TestExtractConfigObject(t *testing.T) {
 		parser := newParser(strings.NewReader("{a+1}"))
 		parser.scanner.Scan()
 		expectedError := invalidKeyError("+", 1, 3)
-		got, err := parser.extractConfigObject()
+		got, err := parser.extractObject()
 		assertError(t, err, expectedError)
 		assertNil(t, got)
 	})
 
-	t.Run("return invalidConfigObject error if parenthesis do not match", func(t *testing.T) {
+	t.Run("return invalidObjectError if parenthesis do not match", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a:1"))
 		parser.scanner.Scan()
-		expectedError := invalidConfigObjectError("parenthesis do not match", 1, 5)
-		got, err := parser.extractConfigObject()
+		expectedError := invalidObjectError("parenthesis do not match", 1, 5)
+		got, err := parser.extractObject()
 		assertError(t, err, expectedError)
 		assertNil(t, got)
 	})
 }
 
-func TestMergeConfigObjects(t *testing.T) {
-	t.Run("merge config objects", func(t *testing.T) {
-		existingItems := ConfigObject{"b": ConfigInt(5)}
-		configObject := ConfigObject{"c": ConfigInt(3)}
-		expected := ConfigObject{"b": ConfigInt(5), "c": ConfigInt(3)}
-		mergeConfigObjects(existingItems, configObject)
-		assertDeepEqual(t, existingItems, expected)
+func TestMergeObjects(t *testing.T) {
+	t.Run("merge objects", func(t *testing.T) {
+		existing := Object{"b": Int(5)}
+		new := Object{"c": Int(3)}
+		expected := Object{"b": Int(5), "c": Int(3)}
+		mergeObjects(existing, new)
+		assertDeepEqual(t, existing, expected)
 	})
 
-	t.Run("merge config objects recursively if both parameters contain the same key as of type ConfigObject", func(t *testing.T) {
-		existingItems := ConfigObject{"b": ConfigObject{"e": ConfigInt(5)}}
-		configObject := ConfigObject{"b": ConfigObject{"f": ConfigInt(7)}, "c": ConfigInt(3)}
-		expected := ConfigObject{"b": ConfigObject{"e": ConfigInt(5), "f": ConfigInt(7)}, "c": ConfigInt(3)}
-		mergeConfigObjects(existingItems, configObject)
-		assertDeepEqual(t, existingItems, expected)
+	t.Run("merge config objects recursively if both parameters contain the same key as of type Object", func(t *testing.T) {
+		existing := Object{"b": Object{"e": Int(5)}}
+		new := Object{"b": Object{"f": Int(7)}, "c": Int(3)}
+		expected := Object{"b": Object{"e": Int(5), "f": Int(7)}, "c": Int(3)}
+		mergeObjects(existing, new)
+		assertDeepEqual(t, existing, expected)
 	})
 
-	t.Run("merge config objects recursively, config from the second parameter should override the first one if any of them are not of type ConfigObject", func(t *testing.T) {
-		existingItems := ConfigObject{"b": ConfigObject{"e": ConfigInt(5)}, "c": ConfigInt(3)}
-		configObject := ConfigObject{"b": ConfigInt(7)}
-		expected := ConfigObject{"b": ConfigInt(7), "c": ConfigInt(3)}
-		mergeConfigObjects(existingItems, configObject)
-		assertDeepEqual(t, existingItems, expected)
+	t.Run("merge config objects recursively, config from the second parameter should override the first one if any of them are not of type Object", func(t *testing.T) {
+		existing := Object{"b": Object{"e": Int(5)}, "c": Int(3)}
+		new := Object{"b": Int(7)}
+		expected := Object{"b": Int(7), "c": Int(3)}
+		mergeObjects(existing, new)
+		assertDeepEqual(t, existing, expected)
 	})
 }
 
 func TestResolveSubstitutions(t *testing.T) {
 	t.Run("resolve valid substitution at the root level", func(t *testing.T) {
-		configObject := ConfigObject{"a": ConfigInt(5), "b": &Substitution{"a", false}}
-		err := resolveSubstitutions(configObject)
+		object := Object{"a": Int(5), "b": &Substitution{"a", false}}
+		err := resolveSubstitutions(object)
 		assertNoError(t, err)
 	})
 
 	t.Run("return an error for non-existing substitution path", func(t *testing.T) {
 		substitution := &Substitution{"c", false}
-		configObject := ConfigObject{"a": ConfigInt(5), "b": substitution}
-		err := resolveSubstitutions(configObject)
+		object := Object{"a": Int(5), "b": substitution}
+		err := resolveSubstitutions(object)
 		expectedError := errors.New("could not resolve substitution: " + substitution.String() + " to a value")
 		assertError(t, err, expectedError)
 	})
 
 	t.Run("ignore the optional substitution if it's path does not exist", func(t *testing.T) {
-		configObject := ConfigObject{"a": ConfigInt(5), "b": &Substitution{"c", true}}
-		err := resolveSubstitutions(configObject)
+		object := Object{"a": Int(5), "b": &Substitution{"c", true}}
+		err := resolveSubstitutions(object)
 		assertNoError(t, err)
 	})
 
 	t.Run("resolve valid substitution at the non-root level", func(t *testing.T) {
-		subConfigObject := ConfigObject{"c": &Substitution{"a", false}}
-		configObject := ConfigObject{"a": ConfigInt(5), "b": subConfigObject}
-		err := resolveSubstitutions(configObject, subConfigObject)
+		subObject := Object{"c": &Substitution{"a", false}}
+		object := Object{"a": Int(5), "b": subObject}
+		err := resolveSubstitutions(object, subObject)
 		assertNoError(t, err)
 	})
 
 	t.Run("resolve valid substitution inside an array", func(t *testing.T) {
-		subConfigArray := ConfigArray{&Substitution{"a", false}}
-		configObject := ConfigObject{"a": ConfigInt(5), "b": subConfigArray}
-		err := resolveSubstitutions(configObject, subConfigArray)
+		subArray := Array{&Substitution{"a", false}}
+		object := Object{"a": Int(5), "b": subArray}
+		err := resolveSubstitutions(object, subArray)
 		assertNoError(t, err)
 	})
 
 	t.Run("return error for non-existing substitution path inside an array", func(t *testing.T) {
 		substitution := &Substitution{"c", false}
-		subConfigArray := ConfigArray{substitution}
-		configObject := ConfigObject{"a": ConfigInt(5), "b": subConfigArray}
-		err := resolveSubstitutions(configObject, subConfigArray)
+		subArray := Array{substitution}
+		object := Object{"a": Int(5), "b": subArray}
+		err := resolveSubstitutions(object, subArray)
 		expectedError := errors.New("could not resolve substitution: " + substitution.String() + " to a value")
 		assertError(t, err, expectedError)
 	})
 
 	t.Run("return error for non-existing substitution path inside an array", func(t *testing.T) {
-		subConfigArray := ConfigArray{&Substitution{"a", true}}
-		configObject := ConfigObject{"a": ConfigInt(5), "b": subConfigArray}
-		err := resolveSubstitutions(configObject, subConfigArray)
+		subArray := Array{&Substitution{"a", true}}
+		object := Object{"a": Int(5), "b": subArray}
+		err := resolveSubstitutions(object, subArray)
 		assertNoError(t, err)
 	})
 
 	t.Run("return array if subConfig is not an object or array", func(t *testing.T) {
-		subConfigInt := ConfigInt(42)
-		configObject := ConfigObject{"a": ConfigInt(5), "b": subConfigInt}
-		err := resolveSubstitutions(configObject, subConfigInt)
+		subInt := Int(42)
+		object := Object{"a": Int(5), "b": subInt}
+		err := resolveSubstitutions(object, subInt)
 		expectedError := invalidValueError("substitutions are only allowed in field values and array elements", 0, 0)
 		assertError(t, err, expectedError)
 	})
@@ -413,8 +413,8 @@ func TestParsePlusEqualsValue(t *testing.T) {
 		for parser.scanner.TokenText() != "42" { // move the scanner to the position for the test case
 			currentRune = parser.scanner.Scan()
 		}
-		existingItems := ConfigObject{}
-		expected := ConfigObject{"a": ConfigArray{ConfigInt(42)}}
+		existingItems := Object{}
+		expected := Object{"a": Array{Int(42)}}
 		err := parser.parsePlusEqualsValue(existingItems, "a", currentRune)
 		assertNoError(t, err)
 		assertDeepEqual(t, existingItems, expected)
@@ -426,8 +426,8 @@ func TestParsePlusEqualsValue(t *testing.T) {
 		for parser.scanner.TokenText() != "[" {
 			currentRune = parser.scanner.Scan()
 		}
-		err := parser.parsePlusEqualsValue(ConfigObject{}, "a", currentRune)
-		expectedError := invalidConfigArrayError("parenthesis do not match", 1, 7)
+		err := parser.parsePlusEqualsValue(Object{}, "a", currentRune)
+		expectedError := invalidArrayError("parenthesis do not match", 1, 7)
 		assertError(t, err, expectedError)
 	})
 
@@ -437,7 +437,7 @@ func TestParsePlusEqualsValue(t *testing.T) {
 		for parser.scanner.TokenText() != "42" { // move the scanner to the position for the test case
 			currentRune = parser.scanner.Scan()
 		}
-		existingItems := ConfigObject{"a": ConfigInt(1)}
+		existingItems := Object{"a": Int(1)}
 		err := parser.parsePlusEqualsValue(existingItems, "a", currentRune)
 		expectedError := invalidValueError(fmt.Sprintf("value: %q of the key: %q is not an array", "1", "a"), 1, 14)
 		assertError(t, err, expectedError)
@@ -449,9 +449,9 @@ func TestParsePlusEqualsValue(t *testing.T) {
 		for parser.scanner.TokenText() != "{" {
 			currentRune = parser.scanner.Scan()
 		}
-		existingItems := ConfigObject{"a": ConfigArray{ConfigInt(5)}}
+		existingItems := Object{"a": Array{Int(5)}}
 		err := parser.parsePlusEqualsValue(existingItems, "a", currentRune)
-		expectedError := invalidConfigObjectError("parenthesis do not match", 1, 15)
+		expectedError := invalidObjectError("parenthesis do not match", 1, 15)
 		assertError(t, err, expectedError)
 	})
 
@@ -461,8 +461,8 @@ func TestParsePlusEqualsValue(t *testing.T) {
 		for parser.scanner.TokenText() != "42" {
 			currentRune = parser.scanner.Scan()
 		}
-		existingItems := ConfigObject{"a": ConfigArray{ConfigInt(5)}}
-		expected := ConfigObject{"a": ConfigArray{ConfigInt(5), ConfigInt(42)}}
+		existingItems := Object{"a": Array{Int(5)}}
+		expected := Object{"a": Array{Int(5), Int(42)}}
 		err := parser.parsePlusEqualsValue(existingItems, "a", currentRune)
 		assertNoError(t, err)
 		assertDeepEqual(t, existingItems, expected)
@@ -602,60 +602,60 @@ func TestParseIncludedResource(t *testing.T) {
 		parser := newParser(strings.NewReader("include abc.conf"))
 		for ; parser.scanner.TokenText() != "abc"; parser.scanner.Scan() {}
 		expectedError := invalidValueError("expected quoted string, optionally wrapped in 'file(...)' or 'classpath(...)'", 1, 9)
-		configObject, err := parser.parseIncludedResource()
+		object, err := parser.parseIncludedResource()
 		assertError(t, err, expectedError)
-		assertNil(t, configObject)
+		assertNil(t, object)
 	})
 
 	t.Run("return an empty object if the file does not exist and the include token is not required", func(t *testing.T) {
 		parser := newParser(strings.NewReader(`include "nonExistFile.conf"`))
 		for ; parser.scanner.TokenText() != `"nonExistFile.conf"`; parser.scanner.Scan() {}
-		configObject, err := parser.parseIncludedResource()
+		object, err := parser.parseIncludedResource()
 		assertNil(t, err)
-		assertConfigEquals(t, configObject, "{}")
+		assertConfigEquals(t, object, "{}")
 	})
 
 	t.Run("return an error if the file does not exist but the include token is required", func(t *testing.T) {
 		parser := newParser(strings.NewReader(`include required("nonExistFile.conf")`))
 		for ; parser.scanner.TokenText() != "required"; parser.scanner.Scan() {}
 		expectedError := fmt.Errorf("could not parse resource: %w", &os.PathError{Op: "open", Path: "nonExistFile.conf", Err: errors.New("no such file or directory")})
-		configObject, err := parser.parseIncludedResource()
+		object, err := parser.parseIncludedResource()
 		assertError(t, err, expectedError)
-		assertNil(t, configObject)
+		assertNil(t, object)
 	})
 
 	t.Run("return an error if the included file contains an array as the value", func(t *testing.T) {
 		parser := newParser(strings.NewReader(`include "testdata/array.conf"`))
 		for ; parser.scanner.TokenText() != `"testdata/array.conf"`; parser.scanner.Scan() {}
 		expectedError := invalidValueError("included file cannot contain an array as the root value", 1, 9)
-		configObject, err := parser.parseIncludedResource()
+		object, err := parser.parseIncludedResource()
 		assertError(t, err, expectedError)
-		assertNil(t, configObject)
+		assertNil(t, object)
 	})
 
 	t.Run("parse the included resource and return the parsed object if there is no error", func(t *testing.T) {
 		parser := newParser(strings.NewReader(`include "testdata/a.conf"`))
 		for ; parser.scanner.TokenText() != `"testdata/a.conf"`; parser.scanner.Scan() {}
-		configObject, err := parser.parseIncludedResource()
+		object, err := parser.parseIncludedResource()
 		assertNoError(t, err)
-		assertConfigEquals(t, configObject, "{a:1}")
+		assertConfigEquals(t, object, "{a:1}")
 	})
 }
 
-func TestExtractConfigArray(t *testing.T) {
-	t.Run("return invalidConfigArray error if the first token is not '['", func(t *testing.T) {
+func TestExtractArray(t *testing.T) {
+	t.Run("return invalidArray error if the first token is not '['", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a:1}"))
 		parser.scanner.Scan()
-		expectedError := invalidConfigArrayError(fmt.Sprintf("%q is not an array start token", "{"), 1, 1)
-		got, err := parser.extractConfigArray()
+		expectedError := invalidArrayError(fmt.Sprintf("%q is not an array start token", "{"), 1, 1)
+		got, err := parser.extractArray()
 		assertError(t, err, expectedError)
 		assertNil(t, got)
 	})
 
-	t.Run("extract the empty config array", func(t *testing.T) {
+	t.Run("extract the empty array", func(t *testing.T) {
 		parser := newParser(strings.NewReader("[]"))
 		parser.scanner.Scan()
-		got, err := parser.extractConfigArray()
+		got, err := parser.extractArray()
 		assertNoError(t, err)
 		assertEquals(t, len(got), 0)
 	})
@@ -664,7 +664,7 @@ func TestExtractConfigArray(t *testing.T) {
 		parser := newParser(strings.NewReader("[a]"))
 		parser.scanner.Scan()
 		expectedError := invalidValueError(fmt.Sprintf("unknown config value: %q", "a"), 1, 2)
-		got, err := parser.extractConfigArray()
+		got, err := parser.extractArray()
 		assertError(t, err, expectedError)
 		assertNil(t, got)
 	})
@@ -672,8 +672,8 @@ func TestExtractConfigArray(t *testing.T) {
 	t.Run("return invalidConfigArray if the closing parenthesis is missing", func(t *testing.T) {
 		parser := newParser(strings.NewReader("[1"))
 		parser.scanner.Scan()
-		expectedError := invalidConfigArrayError("parenthesis do not match", 1, 2)
-		got, err := parser.extractConfigArray()
+		expectedError := invalidArrayError("parenthesis do not match", 1, 2)
+		got, err := parser.extractArray()
 		assertError(t, err, expectedError)
 		assertNil(t, got)
 	})
@@ -681,8 +681,8 @@ func TestExtractConfigArray(t *testing.T) {
 	t.Run("extract the array", func(t *testing.T) {
 		parser := newParser(strings.NewReader("[1, 2]"))
 		parser.scanner.Scan()
-		expected := ConfigArray{ConfigInt(1), ConfigInt(2)}
-		got, err := parser.extractConfigArray()
+		expected := Array{Int(1), Int(2)}
+		got, err := parser.extractArray()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, expected)
 	})
@@ -695,7 +695,7 @@ func TestExtractConfigValue(t *testing.T) {
 		for ; parser.scanner.TokenText() != "1"; currentRune = parser.scanner.Scan() {}
 		got, err := parser.extractConfigValue(currentRune)
 		assertNoError(t, err)
-		assertDeepEqual(t, got, ConfigInt(1))
+		assertDeepEqual(t, got, Int(1))
 	})
 
 	t.Run("extract float32 value", func(t *testing.T) {
@@ -704,7 +704,7 @@ func TestExtractConfigValue(t *testing.T) {
 		for ; parser.scanner.TokenText() != "1.5"; currentRune = parser.scanner.Scan() {}
 		got, err := parser.extractConfigValue(currentRune)
 		assertNoError(t, err)
-		assertDeepEqual(t, got, ConfigFloat32(1.5))
+		assertDeepEqual(t, got, Float32(1.5))
 	})
 
 	t.Run("extract string value", func(t *testing.T) {
@@ -713,19 +713,19 @@ func TestExtractConfigValue(t *testing.T) {
 		for ; parser.scanner.TokenText() != `"b"`; currentRune = parser.scanner.Scan() {}
 		got, err := parser.extractConfigValue(currentRune)
 		assertNoError(t, err)
-		assertDeepEqual(t, got, ConfigString("b"))
+		assertDeepEqual(t, got, String("b"))
 	})
 
 	var booleanTestCases = []struct {
 		input    string
-		expected ConfigBoolean
+		expected Boolean
 	}{
-		{"true", ConfigBoolean(true)},
-		{"yes", ConfigBoolean(true)},
-		{"on", ConfigBoolean(true)},
-		{"false", ConfigBoolean(false)},
-		{"no", ConfigBoolean(false)},
-		{"off", ConfigBoolean(false)},
+		{"true", Boolean(true)},
+		{"yes", Boolean(true)},
+		{"on", Boolean(true)},
+		{"false", Boolean(false)},
+		{"no", Boolean(false)},
+		{"off", Boolean(false)},
 	}
 
 	for _, tc := range booleanTestCases {
@@ -739,22 +739,22 @@ func TestExtractConfigValue(t *testing.T) {
 		})
 	}
 
-	t.Run("extract config object value", func(t *testing.T) {
+	t.Run("extract object value", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a:{b:1}"))
 		var currentRune rune
 		for ; parser.scanner.TokenText() != "{"; currentRune = parser.scanner.Scan() {}
 		got, err := parser.extractConfigValue(currentRune)
 		assertNoError(t, err)
-		assertDeepEqual(t, got, ConfigObject{"b": ConfigInt(1)})
+		assertDeepEqual(t, got, Object{"b": Int(1)})
 	})
 
-	t.Run("extract config array value", func(t *testing.T) {
+	t.Run("extract array value", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a:[1]"))
 		var currentRune rune
 		for ; parser.scanner.TokenText() != "["; currentRune = parser.scanner.Scan() {}
 		got, err := parser.extractConfigValue(currentRune)
 		assertNoError(t, err)
-		assertDeepEqual(t, got, ConfigArray{ConfigInt(1)})
+		assertDeepEqual(t, got, Array{Int(1)})
 	})
 
 	t.Run("extract substitution value", func(t *testing.T) {

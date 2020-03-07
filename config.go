@@ -24,20 +24,20 @@ type Config struct {
 
 func (c *Config) String() string { return c.root.String() }
 
-func (c *Config) GetConfigObject(path string) ConfigObject {
+func (c *Config) GetObject(path string) Object {
 	configValue := c.find(path)
 	if configValue == nil {
 		return nil
 	}
-	return configValue.(ConfigObject)
+	return configValue.(Object)
 }
 
-func (c *Config) GetConfigArray(path string) ConfigArray {
+func (c *Config) GetArray(path string) Array {
 	configValue := c.find(path)
 	if configValue == nil {
 		return nil
 	}
-	return configValue.(ConfigArray)
+	return configValue.(Array)
 }
 
 func (c *Config) GetString(path string) string {
@@ -54,9 +54,9 @@ func (c *Config) GetInt(path string) int {
 		return 0
 	}
 	switch configValue := value.(type) {
-	case ConfigInt:
+	case Int:
 		return int(configValue)
-	case ConfigString:
+	case String:
 		intValue, err := strconv.Atoi(string(configValue))
 		if err != nil {
 			panic(err)
@@ -73,9 +73,9 @@ func (c *Config) GetFloat32(path string) float32 {
 		return float32(0.0)
 	}
 	switch configValue := value.(type) {
-	case ConfigFloat32:
+	case Float32:
 		return float32(configValue)
-	case ConfigString:
+	case String:
 		floatValue, err := strconv.ParseFloat(string(configValue), 32)
 		if err != nil {
 			panic(err)
@@ -92,9 +92,9 @@ func (c *Config) GetBoolean(path string) bool {
 		return false
 	}
 	switch configValue := value.(type) {
-	case ConfigBoolean:
+	case Boolean:
 		return bool(configValue)
-	case ConfigString:
+	case String:
 		switch configValue {
 		case "true", "yes", "on":
 			return true
@@ -112,7 +112,7 @@ func (c *Config) find(path string) ConfigValue {
 	if c.root.ValueType() != ValueTypeObject {
 		return nil
 	}
-	return c.root.(ConfigObject).find(path)
+	return c.root.(Object).find(path)
 
 }
 
@@ -121,23 +121,22 @@ type ConfigValue interface {
 	String() string
 }
 
-type ConfigString string
+type String string
 
-func (c ConfigString) ValueType() ValueType { return ValueTypeString }
-func (c ConfigString) String() string       { return string(c) }
+func (s String) ValueType() ValueType { return ValueTypeString }
+func (s String) String() string       { return string(s) }
 
-type ConfigObject map[string]ConfigValue
+type Object map[string]ConfigValue
 
-func (c ConfigObject) ValueType() ValueType       { return ValueTypeObject }
-func (c ConfigObject) Get(key string) ConfigValue { return c[key] }
+func (o Object) ValueType() ValueType { return ValueTypeObject }
 
-func (c ConfigObject) String() string {
+func (o Object) String() string {
 	var builder strings.Builder
 
-	itemsSize := len(c)
+	itemsSize := len(o)
 	i := 1
 	builder.WriteString(objectStartToken)
-	for key, value := range c {
+	for key, value := range o {
 		builder.WriteString(key)
 		builder.WriteString(colonToken)
 		builder.WriteString(value.String())
@@ -151,35 +150,35 @@ func (c ConfigObject) String() string {
 	return builder.String()
 }
 
-func (c ConfigObject) find(path string) ConfigValue {
+func (o Object) find(path string) ConfigValue {
 	keys := strings.Split(path, dotToken)
 	size := len(keys)
 	lastKey := keys[size-1]
 	keysWithoutLast := keys[:size-1]
-	configObject := c
+	configObject := o
 	for _, key := range keysWithoutLast {
-		value := configObject.Get(key)
-		if value == nil {
+		value, ok := configObject[key]
+		if !ok {
 			return nil
 		}
-		configObject = value.(ConfigObject)
+		configObject = value.(Object)
 	}
-	return configObject.Get(lastKey)
+	return configObject[lastKey]
 }
 
-type ConfigArray []ConfigValue
+type Array []ConfigValue
 
-func (c ConfigArray) ValueType() ValueType { return ValueTypeArray }
+func (a Array) ValueType() ValueType { return ValueTypeArray }
 
-func (c ConfigArray) String() string {
-	if len(c) == 0 {
+func (a Array) String() string {
+	if len(a) == 0 {
 		return "[]"
 	}
 
 	var builder strings.Builder
 	builder.WriteString(arrayStartToken)
-	builder.WriteString(c[0].String())
-	for _, configValue := range c[1:] {
+	builder.WriteString(a[0].String())
+	for _, configValue := range a[1:] {
 		builder.WriteString(commaToken)
 		builder.WriteString(configValue.String())
 	}
@@ -188,26 +187,22 @@ func (c ConfigArray) String() string {
 	return builder.String()
 }
 
-func (c *ConfigArray) Append(value ConfigValue) {
-	*c = append(*c, value)
+type Int int
+
+func (i Int) ValueType() ValueType { return ValueTypeNumber }
+func (i Int) String() string       { return strconv.Itoa(int(i)) }
+
+type Float32 float32
+
+func (f Float32) ValueType() ValueType { return ValueTypeNumber }
+
+func (f Float32) String() string {
+	return strconv.FormatFloat(float64(f), 'e', -1, 32)
 }
 
-type ConfigInt int
+type Boolean bool
 
-func (c ConfigInt) ValueType() ValueType { return ValueTypeNumber }
-func (c ConfigInt) String() string { return strconv.Itoa(int(c)) }
-
-type ConfigFloat32 float32
-
-func (c ConfigFloat32) ValueType() ValueType { return ValueTypeNumber }
-
-func (c ConfigFloat32) String() string {
-	return strconv.FormatFloat(float64(c), 'e', -1, 32)
-}
-
-type ConfigBoolean bool
-
-func NewConfigBooleanFromString(value string) ConfigBoolean {
+func NewBooleanFromString(value string) Boolean {
 	switch value {
 	case "true", "yes", "on":
 		return true
@@ -218,8 +213,8 @@ func NewConfigBooleanFromString(value string) ConfigBoolean {
 	}
 }
 
-func (c ConfigBoolean) ValueType() ValueType { return ValueTypeBoolean }
-func (c ConfigBoolean) String() string       { return strconv.FormatBool(bool(c)) }
+func (b Boolean) ValueType() ValueType { return ValueTypeBoolean }
+func (b Boolean) String() string       { return strconv.FormatBool(bool(b)) }
 
 type Substitution struct {
 	path     string
@@ -239,13 +234,13 @@ func (s *Substitution) String() string {
 	return builder.String()
 }
 
-type ConfigNull string
-const null ConfigNull = "null"
+type Null string
+const null Null = "null"
 
-func (c ConfigNull) ValueType() ValueType { return ValueTypeNull }
-func (c ConfigNull) String() string       { return string(null) }
+func (n Null) ValueType() ValueType { return ValueTypeNull }
+func (n Null) String() string       { return string(null) }
 
-type ConfigDuration time.Duration
+type Duration time.Duration
 
-func (d ConfigDuration) ValueType() ValueType { return ValueTypeString }
-func (d ConfigDuration) String() string       { return time.Duration(d).String() }
+func (d Duration) ValueType() ValueType { return ValueTypeString }
+func (d Duration) String() string       { return time.Duration(d).String() }

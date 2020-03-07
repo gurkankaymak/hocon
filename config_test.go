@@ -8,19 +8,19 @@ func TestGetConfigObject(t *testing.T) {
 	config, _ := ParseString(`{a:{b:"c"}, d:[]}`)
 
 	t.Run("get config object", func(t *testing.T) {
-		got := config.GetConfigObject("a")
+		got := config.GetObject("a")
 		assertConfigEquals(t, got, "{b:c}")
 	})
 
 	t.Run("return nil for a non-existing config object", func(t *testing.T) {
-		got := config.GetConfigObject("e")
+		got := config.GetObject("e")
 		if got != nil {
 			t.Errorf("expected: nil, got: %v", got)
 		}
 	})
 
-	t.Run("panic if non-object type is requested as ConfigObject", func(t *testing.T) {
-		assertPanic(t, func() { config.GetConfigObject("d") })
+	t.Run("panic if non-object type is requested as Object", func(t *testing.T) {
+		assertPanic(t, func() { config.GetObject("d") })
 	})
 }
 
@@ -28,19 +28,19 @@ func TestGetConfigArray(t *testing.T) {
 	config, _ := ParseString(`{a: [1, 2], b: {c: "d"}}`)
 
 	t.Run("get config array", func(t *testing.T) {
-		got := config.GetConfigArray("a")
+		got := config.GetArray("a")
 		assertConfigEquals(t, got, "[1,2]")
 	})
 
 	t.Run("return nil for a non-existing config array", func(t *testing.T) {
-		got := config.GetConfigArray("e")
+		got := config.GetArray("e")
 		if got != nil {
 			t.Errorf("expected: nil, got: %v", got)
 		}
 	})
 
-	t.Run("panic if non-array type is requested as ConfigArray", func(t *testing.T) {
-		assertPanic(t, func() { config.GetConfigArray("b") })
+	t.Run("panic if non-array type is requested as Array", func(t *testing.T) {
+		assertPanic(t, func() { config.GetArray("b") })
 	})
 }
 
