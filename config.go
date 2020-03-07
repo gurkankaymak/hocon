@@ -3,6 +3,7 @@ package hocon
 import (
 	"strconv"
 	"strings"
+	"time"
 )
 
 type ValueType int
@@ -271,3 +272,8 @@ const null ConfigNull = "null"
 
 func (c ConfigNull) ValueType() ValueType { return ValueTypeNull }
 func (c ConfigNull) String() string       { return string(null) }
+
+type ConfigDuration time.Duration
+
+func (d ConfigDuration) ValueType() ValueType { return ValueTypeString }
+func (d ConfigDuration) String() string { return time.Duration(d).String() }
