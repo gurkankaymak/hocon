@@ -147,7 +147,7 @@ func TestExtractConfigObject(t *testing.T) {
 	t.Run("merge the included config object with the existing", func(t *testing.T) {
 		parser := newParser(strings.NewReader(`b:2 include "testdata/a.conf"`))
 		parser.scanner.Scan()
-		expected := NewConfigObject(map[string]ConfigValue{"a": ConfigInt(1), "b": ConfigInt(2)})
+		expected := ConfigObject{"a": ConfigInt(1), "b": ConfigInt(2)}
 		got, err := parser.extractConfigObject()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, expected)
@@ -223,12 +223,7 @@ func TestExtractConfigObject(t *testing.T) {
 	t.Run("return merged object if the current value (after equals separator) is object and there is an existing object with the same key", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a={b:1},a={c:2}}"))
 		parser.scanner.Scan()
-		expected := NewConfigObject(map[string]ConfigValue{
-			"a": NewConfigObject(map[string]ConfigValue{
-				"b": ConfigInt(1),
-				"c": ConfigInt(2),
-			}),
-		})
+		expected := ConfigObject{"a": ConfigObject{"b": ConfigInt(1), "c": ConfigInt(2)}}
 		got, err := parser.extractConfigObject()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, expected)
@@ -237,11 +232,7 @@ func TestExtractConfigObject(t *testing.T) {
 	t.Run("override the existing value if the current value (after equals separator) is object and there is an existing non-object with the same key", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a=1,a={c:2}}"))
 		parser.scanner.Scan()
-		expected := NewConfigObject(map[string]ConfigValue{
-			"a": NewConfigObject(map[string]ConfigValue{
-				"c": ConfigInt(2),
-			}),
-		})
+		expected := ConfigObject{"a": ConfigObject{"c": ConfigInt(2)}}
 		got, err := parser.extractConfigObject()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, expected)
@@ -250,7 +241,7 @@ func TestExtractConfigObject(t *testing.T) {
 	t.Run("override the existing value if the current value (after equals separator) is not object", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a={b:1},a=2}"))
 		parser.scanner.Scan()
-		expected := NewConfigObject(map[string]ConfigValue{"a": ConfigInt(2)})
+		expected := ConfigObject{"a": ConfigInt(2)}
 		got, err := parser.extractConfigObject()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, expected)
@@ -268,12 +259,7 @@ func TestExtractConfigObject(t *testing.T) {
 	t.Run("return merged object if the current value (after colon separator) is object and there is an existing object with the same key", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a:{b:1},a:{c:2}}"))
 		parser.scanner.Scan()
-		expected := NewConfigObject(map[string]ConfigValue{
-			"a": NewConfigObject(map[string]ConfigValue{
-				"b": ConfigInt(1),
-				"c": ConfigInt(2),
-			}),
-		})
+		expected := ConfigObject{"a": ConfigObject{"b": ConfigInt(1), "c": ConfigInt(2)}}
 		got, err := parser.extractConfigObject()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, expected)
@@ -282,11 +268,7 @@ func TestExtractConfigObject(t *testing.T) {
 	t.Run("override the existing value if the current value (after colon separator) is object and there is an existing non-object with the same key", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a:1,a:{c:2}}"))
 		parser.scanner.Scan()
-		expected := NewConfigObject(map[string]ConfigValue{
-			"a": NewConfigObject(map[string]ConfigValue{
-				"c": ConfigInt(2),
-			}),
-		})
+		expected := ConfigObject{"a": ConfigObject{"c": ConfigInt(2)}}
 		got, err := parser.extractConfigObject()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, expected)
@@ -295,7 +277,7 @@ func TestExtractConfigObject(t *testing.T) {
 	t.Run("override the existing value if the current value (after colon separator) is not object", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a:{b:1},a:2}"))
 		parser.scanner.Scan()
-		expected := NewConfigObject(map[string]ConfigValue{"a": ConfigInt(2)})
+		expected := ConfigObject{"a": ConfigInt(2)}
 		got, err := parser.extractConfigObject()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, expected)
@@ -313,7 +295,7 @@ func TestExtractConfigObject(t *testing.T) {
 	t.Run("extract config object with the += separator", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a+=1}"))
 		parser.scanner.Scan()
-		expected := NewConfigObject(map[string]ConfigValue{"a": NewConfigArray([]ConfigValue{ConfigInt(1)})})
+		expected := ConfigObject{"a": ConfigArray{ConfigInt(1)}}
 		got, err := parser.extractConfigObject()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, expected)
@@ -340,37 +322,25 @@ func TestExtractConfigObject(t *testing.T) {
 
 func TestMergeConfigObjects(t *testing.T) {
 	t.Run("merge config objects", func(t *testing.T) {
-		existingItems := map[string]ConfigValue{"b": ConfigInt(5)}
-		configObject := NewConfigObject(map[string]ConfigValue{"c": ConfigInt(3)})
-		expected := map[string]ConfigValue{"b": ConfigInt(5), "c": ConfigInt(3)}
+		existingItems := ConfigObject{"b": ConfigInt(5)}
+		configObject := ConfigObject{"c": ConfigInt(3)}
+		expected := ConfigObject{"b": ConfigInt(5), "c": ConfigInt(3)}
 		mergeConfigObjects(existingItems, configObject)
 		assertDeepEqual(t, existingItems, expected)
 	})
 
-	t.Run("merge config objects recursively if both parameters contain the same key as of type *ConfigObject", func(t *testing.T) {
-		existingItems := map[string]ConfigValue{"b": NewConfigObject(map[string]ConfigValue{"e": ConfigInt(5)})} // {b:{e:5}}
-		configObject := NewConfigObject(map[string]ConfigValue{ // {b:{f:7}, c:3}
-			"b": NewConfigObject(map[string]ConfigValue{"f": ConfigInt(7)}),
-			"c": ConfigInt(3),
-		})
-		expected := map[string]ConfigValue{ // {b:{e:5, f:7}, c:3}
-			"b": NewConfigObject(map[string]ConfigValue{
-				"e": ConfigInt(5),
-				"f": ConfigInt(7),
-			}),
-			"c": ConfigInt(3),
-		}
+	t.Run("merge config objects recursively if both parameters contain the same key as of type ConfigObject", func(t *testing.T) {
+		existingItems := ConfigObject{"b": ConfigObject{"e": ConfigInt(5)}}
+		configObject := ConfigObject{"b": ConfigObject{"f": ConfigInt(7)}, "c": ConfigInt(3)}
+		expected := ConfigObject{"b": ConfigObject{"e": ConfigInt(5), "f": ConfigInt(7)}, "c": ConfigInt(3)}
 		mergeConfigObjects(existingItems, configObject)
 		assertDeepEqual(t, existingItems, expected)
 	})
 
-	t.Run("merge config objects recursively, config from the second parameter should override the first one if any of them are not of type *ConfigObject", func(t *testing.T) {
-		existingItems := map[string]ConfigValue{ // {b:{e:5}, c:3}
-			"b": NewConfigObject(map[string]ConfigValue{"e": ConfigInt(5)}),
-			"c": ConfigInt(3),
-		}
-		configObject := NewConfigObject(map[string]ConfigValue{"b": ConfigInt(7)})
-		expected := map[string]ConfigValue{"b": ConfigInt(7), "c": ConfigInt(3)} // {b:7, c:3}
+	t.Run("merge config objects recursively, config from the second parameter should override the first one if any of them are not of type ConfigObject", func(t *testing.T) {
+		existingItems := ConfigObject{"b": ConfigObject{"e": ConfigInt(5)}, "c": ConfigInt(3)}
+		configObject := ConfigObject{"b": ConfigInt(7)}
+		expected := ConfigObject{"b": ConfigInt(7), "c": ConfigInt(3)}
 		mergeConfigObjects(existingItems, configObject)
 		assertDeepEqual(t, existingItems, expected)
 	})
@@ -378,82 +348,58 @@ func TestMergeConfigObjects(t *testing.T) {
 
 func TestResolveSubstitutions(t *testing.T) {
 	t.Run("resolve valid substitution at the root level", func(t *testing.T) {
-		configObject := NewConfigObject(map[string]ConfigValue{
-			"a": ConfigInt(5),
-			"b": &Substitution{"a", false},
-		})
+		configObject := ConfigObject{"a": ConfigInt(5), "b": &Substitution{"a", false}}
 		err := resolveSubstitutions(configObject)
 		assertNoError(t, err)
 	})
 
 	t.Run("return an error for non-existing substitution path", func(t *testing.T) {
 		substitution := &Substitution{"c", false}
-		configObject := NewConfigObject(map[string]ConfigValue{
-			"a": ConfigInt(5),
-			"b": substitution,
-		})
+		configObject := ConfigObject{"a": ConfigInt(5), "b": substitution}
 		err := resolveSubstitutions(configObject)
 		expectedError := errors.New("could not resolve substitution: " + substitution.String() + " to a value")
 		assertError(t, err, expectedError)
 	})
 
 	t.Run("ignore the optional substitution if it's path does not exist", func(t *testing.T) {
-		configObject := NewConfigObject(map[string]ConfigValue{
-			"a": ConfigInt(5),
-			"b": &Substitution{"c", true},
-		})
+		configObject := ConfigObject{"a": ConfigInt(5), "b": &Substitution{"c", true}}
 		err := resolveSubstitutions(configObject)
 		assertNoError(t, err)
 	})
 
 	t.Run("resolve valid substitution at the non-root level", func(t *testing.T) {
-		subConfigObject := NewConfigObject(map[string]ConfigValue{"c": &Substitution{"a", false}})
-		configObject := NewConfigObject(map[string]ConfigValue{
-			"a": ConfigInt(5),
-			"b": subConfigObject,
-		})
+		subConfigObject := ConfigObject{"c": &Substitution{"a", false}}
+		configObject := ConfigObject{"a": ConfigInt(5), "b": subConfigObject}
 		err := resolveSubstitutions(configObject, subConfigObject)
 		assertNoError(t, err)
 	})
 
 	t.Run("resolve valid substitution inside an array", func(t *testing.T) {
-		subConfigArray := NewConfigArray([]ConfigValue{&Substitution{"a", false}})
-		configObject := NewConfigObject(map[string]ConfigValue{
-			"a": ConfigInt(5),
-			"b": subConfigArray,
-		})
+		subConfigArray := ConfigArray{&Substitution{"a", false}}
+		configObject := ConfigObject{"a": ConfigInt(5), "b": subConfigArray}
 		err := resolveSubstitutions(configObject, subConfigArray)
 		assertNoError(t, err)
 	})
 
 	t.Run("return error for non-existing substitution path inside an array", func(t *testing.T) {
 		substitution := &Substitution{"c", false}
-		subConfigArray := NewConfigArray([]ConfigValue{substitution})
-		configObject := NewConfigObject(map[string]ConfigValue{
-			"a": ConfigInt(5),
-			"b": subConfigArray,
-		})
+		subConfigArray := ConfigArray{substitution}
+		configObject := ConfigObject{"a": ConfigInt(5), "b": subConfigArray}
 		err := resolveSubstitutions(configObject, subConfigArray)
 		expectedError := errors.New("could not resolve substitution: " + substitution.String() + " to a value")
 		assertError(t, err, expectedError)
 	})
 
 	t.Run("return error for non-existing substitution path inside an array", func(t *testing.T) {
-		subConfigArray := NewConfigArray([]ConfigValue{&Substitution{"a", true}})
-		configObject := NewConfigObject(map[string]ConfigValue{
-			"a": ConfigInt(5),
-			"b": subConfigArray,
-		})
+		subConfigArray := ConfigArray{&Substitution{"a", true}}
+		configObject := ConfigObject{"a": ConfigInt(5), "b": subConfigArray}
 		err := resolveSubstitutions(configObject, subConfigArray)
 		assertNoError(t, err)
 	})
 
 	t.Run("return array if subConfig is not an object or array", func(t *testing.T) {
 		subConfigInt := ConfigInt(42)
-		configObject := NewConfigObject(map[string]ConfigValue{
-			"a": ConfigInt(5),
-			"b": subConfigInt,
-		})
+		configObject := ConfigObject{"a": ConfigInt(5), "b": subConfigInt}
 		err := resolveSubstitutions(configObject, subConfigInt)
 		expectedError := invalidValueError("substitutions are only allowed in field values and array elements", 0, 0)
 		assertError(t, err, expectedError)
@@ -467,8 +413,8 @@ func TestParsePlusEqualsValue(t *testing.T) {
 		for parser.scanner.TokenText() != "42" { // move the scanner to the position for the test case
 			currentRune = parser.scanner.Scan()
 		}
-		existingItems := map[string]ConfigValue{}
-		expected := map[string]ConfigValue{"a": NewConfigArray([]ConfigValue{ConfigInt(42)})}
+		existingItems := ConfigObject{}
+		expected := ConfigObject{"a": ConfigArray{ConfigInt(42)}}
 		err := parser.parsePlusEqualsValue(existingItems, "a", currentRune)
 		assertNoError(t, err)
 		assertDeepEqual(t, existingItems, expected)
@@ -480,7 +426,7 @@ func TestParsePlusEqualsValue(t *testing.T) {
 		for parser.scanner.TokenText() != "[" {
 			currentRune = parser.scanner.Scan()
 		}
-		err := parser.parsePlusEqualsValue(map[string]ConfigValue{}, "a", currentRune)
+		err := parser.parsePlusEqualsValue(ConfigObject{}, "a", currentRune)
 		expectedError := invalidConfigArrayError("parenthesis do not match", 1, 7)
 		assertError(t, err, expectedError)
 	})
@@ -491,7 +437,7 @@ func TestParsePlusEqualsValue(t *testing.T) {
 		for parser.scanner.TokenText() != "42" { // move the scanner to the position for the test case
 			currentRune = parser.scanner.Scan()
 		}
-		existingItems := map[string]ConfigValue{"a": ConfigInt(1)}
+		existingItems := ConfigObject{"a": ConfigInt(1)}
 		err := parser.parsePlusEqualsValue(existingItems, "a", currentRune)
 		expectedError := invalidValueError(fmt.Sprintf("value: %q of the key: %q is not an array", "1", "a"), 1, 14)
 		assertError(t, err, expectedError)
@@ -503,7 +449,7 @@ func TestParsePlusEqualsValue(t *testing.T) {
 		for parser.scanner.TokenText() != "{" {
 			currentRune = parser.scanner.Scan()
 		}
-		existingItems := map[string]ConfigValue{"a": NewConfigArray([]ConfigValue{ConfigInt(5)})}
+		existingItems := ConfigObject{"a": ConfigArray{ConfigInt(5)}}
 		err := parser.parsePlusEqualsValue(existingItems, "a", currentRune)
 		expectedError := invalidConfigObjectError("parenthesis do not match", 1, 15)
 		assertError(t, err, expectedError)
@@ -515,8 +461,8 @@ func TestParsePlusEqualsValue(t *testing.T) {
 		for parser.scanner.TokenText() != "42" {
 			currentRune = parser.scanner.Scan()
 		}
-		existingItems := map[string]ConfigValue{"a": NewConfigArray([]ConfigValue{ConfigInt(5)})}
-		expected := map[string]ConfigValue{"a": NewConfigArray([]ConfigValue{ConfigInt(5), ConfigInt(42)})}
+		existingItems := ConfigObject{"a": ConfigArray{ConfigInt(5)}}
+		expected := ConfigObject{"a": ConfigArray{ConfigInt(5), ConfigInt(42)}}
 		err := parser.parsePlusEqualsValue(existingItems, "a", currentRune)
 		assertNoError(t, err)
 		assertDeepEqual(t, existingItems, expected)
@@ -586,7 +532,7 @@ func TestValidateIncludeValue(t *testing.T) {
 		assertError(t, err, expectedError)
 		assertNil(t, got)
 	})
-	
+
 	t.Run("return the path with quotes removed", func(t *testing.T) {
 		parser := newParser(strings.NewReader(`include "abc.conf"`))
 		for ; parser.scanner.TokenText() != `"abc.conf"`; parser.scanner.Scan() {}
@@ -711,7 +657,7 @@ func TestExtractConfigArray(t *testing.T) {
 		parser.scanner.Scan()
 		got, err := parser.extractConfigArray()
 		assertNoError(t, err)
-		assertEquals(t, len(got.values), 0)
+		assertEquals(t, len(got), 0)
 	})
 
 	t.Run("return the error if any error occurs in extractConfigValue method", func(t *testing.T) {
@@ -735,7 +681,7 @@ func TestExtractConfigArray(t *testing.T) {
 	t.Run("extract the array", func(t *testing.T) {
 		parser := newParser(strings.NewReader("[1, 2]"))
 		parser.scanner.Scan()
-		expected := NewConfigArray([]ConfigValue{ConfigInt(1), ConfigInt(2)})
+		expected := ConfigArray{ConfigInt(1), ConfigInt(2)}
 		got, err := parser.extractConfigArray()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, expected)
@@ -799,7 +745,7 @@ func TestExtractConfigValue(t *testing.T) {
 		for ; parser.scanner.TokenText() != "{"; currentRune = parser.scanner.Scan() {}
 		got, err := parser.extractConfigValue(currentRune)
 		assertNoError(t, err)
-		assertDeepEqual(t, got, NewConfigObject(map[string]ConfigValue{"b": ConfigInt(1)}))
+		assertDeepEqual(t, got, ConfigObject{"b": ConfigInt(1)})
 	})
 
 	t.Run("extract config array value", func(t *testing.T) {
@@ -808,7 +754,7 @@ func TestExtractConfigValue(t *testing.T) {
 		for ; parser.scanner.TokenText() != "["; currentRune = parser.scanner.Scan() {}
 		got, err := parser.extractConfigValue(currentRune)
 		assertNoError(t, err)
-		assertDeepEqual(t, got, NewConfigArray([]ConfigValue{ConfigInt(1)}))
+		assertDeepEqual(t, got, ConfigArray{ConfigInt(1)})
 	})
 
 	t.Run("extract substitution value", func(t *testing.T) {

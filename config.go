@@ -24,20 +24,20 @@ type Config struct {
 
 func (c *Config) String() string { return c.root.String() }
 
-func (c *Config) GetConfigObject(path string) *ConfigObject {
+func (c *Config) GetConfigObject(path string) ConfigObject {
 	configValue := c.find(path)
 	if configValue == nil {
 		return nil
 	}
-	return configValue.(*ConfigObject)
+	return configValue.(ConfigObject)
 }
 
-func (c *Config) GetConfigArray(path string) *ConfigArray {
+func (c *Config) GetConfigArray(path string) ConfigArray {
 	configValue := c.find(path)
 	if configValue == nil {
 		return nil
 	}
-	return configValue.(*ConfigArray)
+	return configValue.(ConfigArray)
 }
 
 func (c *Config) GetString(path string) string {
@@ -112,7 +112,7 @@ func (c *Config) find(path string) ConfigValue {
 	if c.root.ValueType() != ValueTypeObject {
 		return nil
 	}
-	return c.root.(*ConfigObject).find(path)
+	return c.root.(ConfigObject).find(path)
 
 }
 
@@ -126,23 +126,18 @@ type ConfigString string
 func (c ConfigString) ValueType() ValueType { return ValueTypeString }
 func (c ConfigString) String() string       { return string(c) }
 
-type ConfigObject struct {
-	items map[string]ConfigValue
-}
+type ConfigObject map[string]ConfigValue
 
-func NewConfigObject(items map[string]ConfigValue) *ConfigObject { return &ConfigObject{items: items} }
+func (c ConfigObject) ValueType() ValueType       { return ValueTypeObject }
+func (c ConfigObject) Get(key string) ConfigValue { return c[key] }
 
-func (c *ConfigObject) ValueType() ValueType { return ValueTypeObject }
-
-func (c *ConfigObject) Get(key string) ConfigValue { return c.items[key] }
-
-func (c *ConfigObject) String() string {
+func (c ConfigObject) String() string {
 	var builder strings.Builder
 
-	itemsSize := len(c.items)
+	itemsSize := len(c)
 	i := 1
 	builder.WriteString(objectStartToken)
-	for key, value := range c.items {
+	for key, value := range c {
 		builder.WriteString(key)
 		builder.WriteString(colonToken)
 		builder.WriteString(value.String())
@@ -156,39 +151,35 @@ func (c *ConfigObject) String() string {
 	return builder.String()
 }
 
-func (c *ConfigObject) find(path string) ConfigValue {
+func (c ConfigObject) find(path string) ConfigValue {
 	keys := strings.Split(path, dotToken)
 	size := len(keys)
 	lastKey := keys[size-1]
 	keysWithoutLast := keys[:size-1]
 	configObject := c
 	for _, key := range keysWithoutLast {
-		value, ok := configObject.items[key]
-		if !ok {
+		value := configObject.Get(key)
+		if value == nil {
 			return nil
 		}
-		configObject = value.(*ConfigObject)
+		configObject = value.(ConfigObject)
 	}
-	return configObject.items[lastKey]
+	return configObject.Get(lastKey)
 }
 
-type ConfigArray struct {
-	values []ConfigValue
-}
+type ConfigArray []ConfigValue
 
-func NewConfigArray(values []ConfigValue) *ConfigArray { return &ConfigArray{values: values} }
+func (c ConfigArray) ValueType() ValueType { return ValueTypeArray }
 
-func (c *ConfigArray) ValueType() ValueType { return ValueTypeArray }
-
-func (c *ConfigArray) String() string {
-	if len(c.values) == 0 {
+func (c ConfigArray) String() string {
+	if len(c) == 0 {
 		return "[]"
 	}
 
 	var builder strings.Builder
 	builder.WriteString(arrayStartToken)
-	builder.WriteString(c.values[0].String())
-	for _, configValue := range c.values[1:] {
+	builder.WriteString(c[0].String())
+	for _, configValue := range c[1:] {
 		builder.WriteString(commaToken)
 		builder.WriteString(configValue.String())
 	}
@@ -198,7 +189,7 @@ func (c *ConfigArray) String() string {
 }
 
 func (c *ConfigArray) Append(value ConfigValue) {
-	c.values = append(c.values, value)
+	*c = append(*c, value)
 }
 
 type ConfigInt int
