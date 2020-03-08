@@ -113,6 +113,8 @@ func processSubstitution(root Object, value Value, resolveFunc func(value Value)
 		substitution := value.(*Substitution)
 		if foundValue := root.find(substitution.path); foundValue != nil {
 			resolveFunc(foundValue)
+		} else if env, ok := os.LookupEnv(substitution.path); ok {
+			resolveFunc(String(env))
 		} else if !substitution.optional {
 			return errors.New("could not resolve substitution: " + substitution.String() + " to a value")
 		}
@@ -392,13 +394,16 @@ func (p *Parser) extractValue(currentRune rune) (Value, error) {
 		p.scanner.Scan()
 		return String(strings.ReplaceAll(token, `"`, "")), nil
 	case scanner.Ident:
-		if token == string(null) {
+		switch {
+		case token == string(null):
 			p.scanner.Scan()
 			return null, nil
-		}
-		if isBooleanString(token) {
+		case isBooleanString(token):
 			p.scanner.Scan()
 			return NewBooleanFromString(token), nil
+		case isUnquotedString(token):
+			p.scanner.Scan()
+			return String(token), nil
 		}
 	default:
 		switch {
@@ -516,6 +521,15 @@ func isSubstitution(token string, peekedToken rune) bool {
 
 func isSeparator(token string, peekedToken rune) bool {
 	return token == equalsToken || token == colonToken || (token == "+" && peekedToken == '=')
+}
+
+func isUnquotedString(token string) bool {
+	for forbiddenChar, _ := range forbiddenCharacters {
+		if strings.Contains(token, forbiddenChar) {
+			return false
+		}
+	}
+	return true
 }
 
 type IncludeToken struct {

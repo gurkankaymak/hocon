@@ -75,6 +75,8 @@ func (c *Config) GetFloat32(path string) float32 {
 	switch val := value.(type) {
 	case Float32:
 		return float32(val)
+	case Float64:
+		return float32(val)
 	case String:
 		floatValue, err := strconv.ParseFloat(string(val), 32)
 		if err != nil {
@@ -83,6 +85,27 @@ func (c *Config) GetFloat32(path string) float32 {
 		return float32(floatValue)
 	default:
 		panic("cannot parse value: " + val.String() + " to float32!")
+	}
+}
+
+func (c *Config) GetFloat64(path string) float64 {
+	value := c.find(path)
+	if value == nil {
+		return 0.0
+	}
+	switch val := value.(type) {
+	case Float64:
+		return float64(val)
+	case Float32:
+		return float64(val)
+	case String:
+		floatValue, err := strconv.ParseFloat(string(val), 64)
+		if err != nil {
+			panic(err)
+		}
+		return floatValue
+	default:
+		panic("cannot parse value: " + val.String() + "to float64!")
 	}
 }
 
@@ -196,6 +219,11 @@ type Float32 float32
 
 func (f Float32) Type() Type     { return NumberType }
 func (f Float32) String() string { return strconv.FormatFloat(float64(f), 'e', -1, 32) }
+
+type Float64 float64
+
+func (f Float64) Type() Type     { return NumberType }
+func (f Float64) String() string { return strconv.FormatFloat(float64(f), 'e', -1, 64) }
 
 type Boolean bool
 
