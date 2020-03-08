@@ -48,3 +48,7 @@ func invalidKeyError(key string, line, column int) *ParseError {
 func invalidValueError(message string, line, column int) *ParseError {
 	return parseError("invalid value!", message, line, column)
 }
+
+func unclosedMultiLineStringError() *ParseError {
+	return parseError("unclosed multi-line string!", "", 0, 0)
+}

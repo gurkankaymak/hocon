@@ -391,6 +391,9 @@ func (p *Parser) extractValue(currentRune rune) (Value, error) {
 		}
 		return Float32(value), nil
 	case scanner.String:
+		if isMultiLineString(token, p.scanner.Peek()) {
+			return p.extractMultiLineString()
+		}
 		p.scanner.Scan()
 		return String(strings.ReplaceAll(token, `"`, "")), nil
 	case scanner.Ident:
@@ -511,6 +514,27 @@ func (p *Parser) consumeComment() rune {
 	return currentRune
 }
 
+func (p *Parser) extractMultiLineString() (String, error) {
+	p.scanner.Next()
+	adjacentQuoteCount := 0
+	var multiLineBuilder strings.Builder
+	for next := p.scanner.Next(); next != scanner.EOF; next = p.scanner.Next() {
+		multiLineBuilder.WriteRune(next)
+		if next == '"' {
+			adjacentQuoteCount++
+		} else {
+			adjacentQuoteCount = 0
+		}
+		if adjacentQuoteCount >= 3 && p.scanner.Peek() != '"' {
+			break
+		}
+	}
+	if adjacentQuoteCount >= 3 {
+		return String(multiLineBuilder.String()[:multiLineBuilder.Len()-3]), nil
+	}
+	return "", unclosedMultiLineStringError()
+}
+
 func isBooleanString(token string) bool {
 	return token == "true" || token == "yes" || token == "on" || token == "false" || token == "no" || token == "off"
 }
@@ -530,6 +554,10 @@ func isUnquotedString(token string) bool {
 		}
 	}
 	return true
+}
+
+func isMultiLineString(token string, peekedToken rune) bool {
+	return token == `""` && peekedToken == '"'
 }
 
 type IncludeToken struct {
