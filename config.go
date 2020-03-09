@@ -1,6 +1,7 @@
 package hocon
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -155,7 +156,6 @@ func (o Object) Type() Type { return ObjectType }
 
 func (o Object) String() string {
 	var builder strings.Builder
-
 	itemsSize := len(o)
 	i := 1
 	builder.WriteString(objectStartToken)
@@ -169,7 +169,6 @@ func (o Object) String() string {
 		i++
 	}
 	builder.WriteString(objectEndToken)
-
 	return builder.String()
 }
 
@@ -197,7 +196,6 @@ func (a Array) String() string {
 	if len(a) == 0 {
 		return "[]"
 	}
-
 	var builder strings.Builder
 	builder.WriteString(arrayStartToken)
 	builder.WriteString(a[0].String())
@@ -206,7 +204,6 @@ func (a Array) String() string {
 		builder.WriteString(value.String())
 	}
 	builder.WriteString(arrayEndToken)
-
 	return builder.String()
 }
 
@@ -234,7 +231,7 @@ func NewBooleanFromString(value string) Boolean {
 	case "false", "no", "off":
 		return false
 	default:
-		panic("cannot parse value: " + value + " to boolean!")
+		panic(fmt.Sprintf("cannot parse value: %s to boolean!", value))
 	}
 }
 

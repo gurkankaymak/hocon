@@ -3,6 +3,7 @@ package hocon
 import (
 	"reflect"
 	"testing"
+	"text/scanner"
 )
 
 func assertEquals(t *testing.T, got, expected interface{}) {
@@ -61,6 +62,18 @@ func assertNil(t *testing.T, i interface{}) {
 	if !isNil(i) {
 		fail(t, i, nil)
 	}
+}
+
+func advanceScanner(t *testing.T, parser *Parser, target string) rune {
+	t.Helper()
+	var currentRune rune
+	for parser.scanner.TokenText() != target {
+		currentRune = parser.scanner.Scan()
+		if currentRune == scanner.EOF {
+			panic("EOF is reached for the test: " + t.Name())
+		}
+	}
+	return currentRune
 }
 
 func fail(t *testing.T, got, expected interface{}) {
