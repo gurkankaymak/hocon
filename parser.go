@@ -567,7 +567,7 @@ func isSeparator(token string, peekedToken rune) bool {
 }
 
 func isUnquotedString(token string) bool {
-	for forbiddenChar, _ := range forbiddenCharacters {
+	for forbiddenChar := range forbiddenCharacters {
 		if strings.Contains(token, forbiddenChar) {
 			return false
 		}

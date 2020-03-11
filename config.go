@@ -7,8 +7,10 @@ import (
 	"time"
 )
 
+// Type of an hocon Value
 type Type int
 
+// Type constants
 const (
 	ObjectType Type = iota
 	StringType
@@ -159,12 +161,14 @@ type Value interface {
 // String represents a string value
 type String string
 
+// Type String
 func (s String) Type() Type     { return StringType }
 func (s String) String() string { return string(s) }
 
 // Object represents an object node in the configuration tree
 type Object map[string]Value
 
+// Type Object
 func (o Object) Type() Type { return ObjectType }
 
 // String method returns the string representation of the Object
@@ -205,6 +209,7 @@ func (o Object) find(path string) Value {
 // Array represents an array node in the configuration tree
 type Array []Value
 
+// Type Array
 func (a Array) Type() Type { return ArrayType }
 
 // String method returns the string representation of the Array
@@ -226,24 +231,28 @@ func (a Array) String() string {
 // Int represents an Integer value
 type Int int
 
+// Type Number
 func (i Int) Type() Type     { return NumberType }
 func (i Int) String() string { return strconv.Itoa(int(i)) }
 
 // Float32 represents a Float32 value
 type Float32 float32
 
+// Type Number
 func (f Float32) Type() Type     { return NumberType }
 func (f Float32) String() string { return strconv.FormatFloat(float64(f), 'e', -1, 32) }
 
 // Float64 represents a Float64 value
 type Float64 float64
 
+// Type Number
 func (f Float64) Type() Type     { return NumberType }
 func (f Float64) String() string { return strconv.FormatFloat(float64(f), 'e', -1, 64) }
 
 // Boolean represents bool value
 type Boolean bool
 
+// NewBooleanFromString creates a Boolean value from the given string, it panics if the string cannot be converted to Boolean
 func NewBooleanFromString(value string) Boolean {
 	switch value {
 	case "true", "yes", "on":
@@ -251,10 +260,11 @@ func NewBooleanFromString(value string) Boolean {
 	case "false", "no", "off":
 		return false
 	default:
-		panic(fmt.Sprintf("cannot parse value: %s to boolean!", value))
+		panic(fmt.Sprintf("cannot parse value: %s to Boolean!", value))
 	}
 }
 
+// Type Boolean
 func (b Boolean) Type() Type     { return BooleanType }
 func (b Boolean) String() string { return strconv.FormatBool(bool(b)) }
 
@@ -264,6 +274,7 @@ type Substitution struct {
 	optional bool
 }
 
+// Type Substitution
 func (s *Substitution) Type() Type { return SubstitutionType }
 
 // String method returns the string representation of the Substitution
@@ -283,11 +294,13 @@ type Null string
 
 const null Null = "null"
 
+// Type Null
 func (n Null) Type() Type     { return NullType }
 func (n Null) String() string { return string(null) }
 
 // Duration represents a duration value
 type Duration time.Duration
 
+// Type String
 func (d Duration) Type() Type     { return StringType }
 func (d Duration) String() string { return time.Duration(d).String() }

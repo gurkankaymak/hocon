@@ -187,7 +187,7 @@ func TestExtractObject(t *testing.T) {
 		assertDeepEqual(t, got, expected)
 	})
 
-	for forbiddenChar, _ := range forbiddenCharacters {
+	for forbiddenChar := range forbiddenCharacters {
 		t.Run(fmt.Sprintf("return error if the key contains the forbidden character: %q", forbiddenChar), func(t *testing.T) {
 			if forbiddenChar != "`" && forbiddenChar != `"` && forbiddenChar != "}" && forbiddenChar != "#" {
 				parser := newParser(strings.NewReader(fmt.Sprintf("{%s:1}", forbiddenChar)))
@@ -1056,7 +1056,7 @@ func TestExtractSubstitution(t *testing.T) {
 		assertDeepEqual(t, substitution, expected)
 	})
 
-	for forbiddenChar, _ := range forbiddenCharacters {
+	for forbiddenChar := range forbiddenCharacters {
 		t.Run(fmt.Sprintf("return error for the forbidden character: %q", forbiddenChar), func(t *testing.T) {
 			if forbiddenChar != "`" && forbiddenChar != `"` && forbiddenChar != "}" && forbiddenChar != "#" {
 				parser := newParser(strings.NewReader(fmt.Sprintf("a:${b%s}", forbiddenChar)))
@@ -1125,7 +1125,7 @@ func TestIsSubstitution(t *testing.T) {
 }
 
 func TestIsUnquotedString(t *testing.T) {
-	for forbiddenChar, _ := range forbiddenCharacters {
+	for forbiddenChar := range forbiddenCharacters {
 		t.Run(fmt.Sprintf("return false if the token contains the forbidden character: %q", forbiddenChar), func(t *testing.T) {
 			if forbiddenChar != "`" && forbiddenChar != `"` && forbiddenChar != "}" && forbiddenChar != "#" {
 				got := isUnquotedString(fmt.Sprintf("aa%sbb", forbiddenChar))

@@ -2,6 +2,7 @@ package hocon
 
 import "fmt"
 
+// ParseError represents an error occurred while parsing a resource or string to a hocon configuration
 type ParseError struct {
 	errType string
 	message string
