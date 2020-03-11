@@ -251,19 +251,19 @@ func TestArray_String(t *testing.T) {
 func TestConfigFind(t *testing.T) {
 	t.Run("return nil if the root of config is not an Object", func(t *testing.T) {
 		config := &Config{Array{Int(1)}}
-		got := config.find("a")
+		got := config.Find("a")
 		assertNil(t, got)
 	})
 
 	t.Run("find the value if the root of config is an object and a value exist with the given path", func(t *testing.T) {
 		config := &Config{Object{"a": Int(1)}}
-		got := config.find("a")
+		got := config.Find("a")
 		assertEquals(t, got, Int(1))
 	})
 
 	t.Run("return nil if the root of config is an object but value with the given path does not exist", func(t *testing.T) {
 		config := &Config{Object{"a": Int(1)}}
-		got := config.find("b")
+		got := config.Find("b")
 		assertNil(t, got)
 	})
 }

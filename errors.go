@@ -52,3 +52,15 @@ func invalidValueError(message string, line, column int) *ParseError {
 func unclosedMultiLineStringError() *ParseError {
 	return parseError("unclosed multi-line string!", "", 0, 0)
 }
+
+func missingCommaError(line, column int) *ParseError {
+	return parseError("missing comma!", `values should have comma or ASCII newline ('\n') between them`, line, column)
+}
+
+func adjacentCommasError(line, column int) *ParseError {
+	return parseError("two adjacent commas", "adjacent commas in arrays and objects are invalid!", line, column)
+}
+
+func leadingCommaError(line, column int) *ParseError {
+	return parseError("leading comma", "leading comma in arrays and objects are invalid!", line, column)
+}

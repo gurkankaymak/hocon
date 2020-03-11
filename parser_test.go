@@ -40,8 +40,8 @@ func TestParseResource(t *testing.T) {
 
 func TestParse(t *testing.T) {
 	t.Run("try to parse as config array if the input starts with '[' and return the error from extractArray if any", func(t *testing.T) {
-		parser := newParser(strings.NewReader("[5}"))
-		expectedError := invalidArrayError("parenthesis do not match", 1, 3)
+		parser := newParser(strings.NewReader("[5"))
+		expectedError := invalidArrayError("parenthesis do not match", 1, 2)
 		got, err := parser.parse()
 		assertError(t, err, expectedError)
 		assertNil(t, got)
@@ -55,7 +55,7 @@ func TestParse(t *testing.T) {
 	})
 
 	t.Run("return the same error if any error occurs in the extractObject method", func(t *testing.T) {
-		parser := newParser(strings.NewReader("{a:5]"))
+		parser := newParser(strings.NewReader("{a:5"))
 		expectedError := invalidObjectError("parenthesis do not match", 1, 5)
 		got, err := parser.parse()
 		assertError(t, err, expectedError)
@@ -148,6 +148,14 @@ func TestExtractObject(t *testing.T) {
 		assertDeepEqual(t, got, Object{"a": Int(1)})
 	})
 
+	t.Run("extract nested object", func(t *testing.T) {
+		parser := newParser(strings.NewReader("{a.b:1,c:2}"))
+		parser.scanner.Scan()
+		got, err := parser.extractObject()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, Object{"a": Object{"b": Int(1)}, "c": Int(2)})
+	})
+
 	t.Run("skip the comments inside objects", func(t *testing.T) {
 		config := `{
 			# this is a comment
@@ -171,7 +179,7 @@ func TestExtractObject(t *testing.T) {
 	})
 
 	t.Run("merge the included object with the existing", func(t *testing.T) {
-		parser := newParser(strings.NewReader(`b:2 include "testdata/a.conf"`))
+		parser := newParser(strings.NewReader(`b:2, include "testdata/a.conf"`))
 		parser.scanner.Scan()
 		expected := Object{"a": Int(1), "b": Int(2)}
 		got, err := parser.extractObject()
@@ -331,6 +339,40 @@ func TestExtractObject(t *testing.T) {
 		parser := newParser(strings.NewReader("{a+1}"))
 		parser.scanner.Scan()
 		expectedError := invalidKeyError("+", 1, 3)
+		got, err := parser.extractObject()
+		assertError(t, err, expectedError)
+		assertNil(t, got)
+	})
+
+	t.Run("extract only the sub-object and return if the isSubObject is given 'true'", func(t *testing.T) {
+		parser := newParser(strings.NewReader("{a.b:1,c:2}"))
+		advanceScanner(t, parser, "b")
+		got, err := parser.extractObject(true)
+		assertNoError(t, err)
+		assertDeepEqual(t, got, Object{"b": Int(1)})
+	})
+
+	t.Run("return missingCommaError if there is no comma or ASCII newline between the object elements", func(t *testing.T) {
+		parser := newParser(strings.NewReader("{a:1 b:2}"))
+		parser.scanner.Scan()
+		expectedError := missingCommaError(1, 6)
+		got, err := parser.extractObject()
+		assertError(t, err, expectedError)
+		assertNil(t, got)
+	})
+
+	t.Run("skip comma between the object elements", func(t *testing.T) {
+		parser := newParser(strings.NewReader("{a:1,b:2}"))
+		parser.scanner.Scan()
+		got, err := parser.extractObject()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, Object{"a": Int(1), "b": Int(2)})
+	})
+
+	t.Run("return adjacentCommasError if there are two adjacent commas between the elements of the object", func(t *testing.T) {
+		parser := newParser(strings.NewReader("{a:1,,b:2}"))
+		parser.scanner.Scan()
+		expectedError := adjacentCommasError(1, 6)
 		got, err := parser.extractObject()
 		assertError(t, err, expectedError)
 		assertNil(t, got)
@@ -559,7 +601,7 @@ func TestValidateIncludeValue(t *testing.T) {
 	t.Run("return the path with quotes removed", func(t *testing.T) {
 		parser := newParser(strings.NewReader(`include "abc.conf"`))
 		advanceScanner(t, parser, `"abc.conf"`)
-		expected := &IncludeToken{path:"abc.conf", required:false}
+		expected := &include{path: "abc.conf", required:false}
 		got, err := parser.validateIncludeValue()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, expected)
@@ -569,7 +611,7 @@ func TestValidateIncludeValue(t *testing.T) {
 		parser := newParser(strings.NewReader(`include file("abc.conf")`))
 		advanceScanner(t, parser, "file")
 		got, err := parser.validateIncludeValue()
-		expected := &IncludeToken{path:"abc.conf", required:false}
+		expected := &include{path: "abc.conf", required:false}
 		assertNoError(t, err)
 		assertDeepEqual(t, got, expected)
 	})
@@ -577,7 +619,7 @@ func TestValidateIncludeValue(t *testing.T) {
 	t.Run("return the include token containing the path in classpath(...) with quotes removed and required as 'false'", func(t *testing.T) {
 		parser := newParser(strings.NewReader(`include classpath("abc.conf")`))
 		advanceScanner(t, parser, "classpath")
-		expected := &IncludeToken{path:"abc.conf", required:false}
+		expected := &include{path: "abc.conf", required:false}
 		got, err := parser.validateIncludeValue()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, expected)
@@ -605,7 +647,7 @@ func TestValidateIncludeValue(t *testing.T) {
 		parser := newParser(strings.NewReader(`include required(file("abc.conf"))`))
 		advanceScanner(t, parser, "required")
 		got, err := parser.validateIncludeValue()
-		expected := &IncludeToken{path:"abc.conf", required:true}
+		expected := &include{path: "abc.conf", required:true}
 		assertNoError(t, err)
 		assertDeepEqual(t, got, expected)
 	})
@@ -613,7 +655,7 @@ func TestValidateIncludeValue(t *testing.T) {
 	t.Run("return the include token containing the path in required(classpath(...)) with quotes removed and required as 'true'", func(t *testing.T) {
 		parser := newParser(strings.NewReader(`include required(classpath("abc.conf"))`))
 		advanceScanner(t, parser, "required")
-		expected := &IncludeToken{path:"abc.conf", required:true}
+		expected := &include{path: "abc.conf", required:true}
 		got, err := parser.validateIncludeValue()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, expected)
@@ -675,6 +717,15 @@ func TestExtractArray(t *testing.T) {
 		assertNil(t, got)
 	})
 
+	t.Run("return leadingCommaError if the array starts with a comma", func(t *testing.T) {
+		parser := newParser(strings.NewReader("[,1]"))
+		parser.scanner.Scan()
+		expectedError := leadingCommaError(1, 2)
+		got, err := parser.extractArray()
+		assertError(t, err, expectedError)
+		assertNil(t, got)
+	})
+
 	t.Run("extract the empty array", func(t *testing.T) {
 		parser := newParser(strings.NewReader("[]"))
 		parser.scanner.Scan()
@@ -699,6 +750,40 @@ func TestExtractArray(t *testing.T) {
 		got, err := parser.extractArray()
 		assertError(t, err, expectedError)
 		assertNil(t, got)
+	})
+
+	t.Run("return missingCommaError if there is no comma or ASCII newline between the array elements", func(t *testing.T) {
+		parser := newParser(strings.NewReader("[1 2]"))
+		parser.scanner.Scan()
+		expectedError := missingCommaError(1, 4)
+		got, err := parser.extractArray()
+		assertError(t, err, expectedError)
+		assertNil(t, got)
+	})
+
+	t.Run("return adjacentCommasError if there are two adjacent commas between the elements of the array", func(t *testing.T) {
+		parser := newParser(strings.NewReader("[1,,2]"))
+		parser.scanner.Scan()
+		expectedError := adjacentCommasError(1, 4)
+		got, err := parser.extractArray()
+		assertError(t, err, expectedError)
+		assertNil(t, got)
+	})
+
+	t.Run("extract the array without an error even if the array ends with a comma", func(t *testing.T) {
+		parser := newParser(strings.NewReader("[1,]"))
+		parser.scanner.Scan()
+		got, err := parser.extractArray()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, Array{Int(1)})
+	})
+
+	t.Run("extract the array without an error if if elements are separated with ASCII newline", func(t *testing.T) {
+		parser := newParser(strings.NewReader("[1\n2]"))
+		parser.scanner.Scan()
+		got, err := parser.extractArray()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, Array{Int(1), Int(2)})
 	})
 
 	t.Run("extract the array", func(t *testing.T) {

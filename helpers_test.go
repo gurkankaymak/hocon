@@ -64,7 +64,7 @@ func assertNil(t *testing.T, i interface{}) {
 	}
 }
 
-func advanceScanner(t *testing.T, parser *Parser, target string) rune {
+func advanceScanner(t *testing.T, parser *parser, target string) rune {
 	t.Helper()
 	var currentRune rune
 	for parser.scanner.TokenText() != target {

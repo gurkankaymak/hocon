@@ -19,38 +19,44 @@ const (
 	SubstitutionType
 )
 
+// Config stores the root of the configuration tree and provides an API to retrieve configuration values with the path expressions
 type Config struct {
 	root Value
 }
 
+// String method returns the string representation of the Config object
 func (c *Config) String() string { return c.root.String() }
 
+// GetObject method finds the value at the given path and returns it as an Object, returns nil if the value is not found
 func (c *Config) GetObject(path string) Object {
-	value := c.find(path)
+	value := c.Find(path)
 	if value == nil {
 		return nil
 	}
 	return value.(Object)
 }
 
+// GetArray method finds the value at the given path and returns it as an Array, returns nil if the value is not found
 func (c *Config) GetArray(path string) Array {
-	value := c.find(path)
+	value := c.Find(path)
 	if value == nil {
 		return nil
 	}
 	return value.(Array)
 }
 
+// GetString method finds the value at the given path and returns it as a String, returns empty string if the value is not found
 func (c *Config) GetString(path string) string {
-	value := c.find(path)
+	value := c.Find(path)
 	if value == nil {
 		return ""
 	}
 	return value.String()
 }
 
+// GetInt method finds the value at the given path and returns it as an Int, returns zero if the value is not found
 func (c *Config) GetInt(path string) int {
-	value := c.find(path)
+	value := c.Find(path)
 	if value == nil {
 		return 0
 	}
@@ -68,8 +74,9 @@ func (c *Config) GetInt(path string) int {
 	}
 }
 
+// GetFloat32 method finds the value at the given path and returns it as a Float32, returns float32(0.0) if the value is not found
 func (c *Config) GetFloat32(path string) float32 {
-	value := c.find(path)
+	value := c.Find(path)
 	if value == nil {
 		return float32(0.0)
 	}
@@ -89,8 +96,9 @@ func (c *Config) GetFloat32(path string) float32 {
 	}
 }
 
+// GetFloat64 method finds the value at the given path and returns it as a Float64, returns 0.0 if the value is not found
 func (c *Config) GetFloat64(path string) float64 {
-	value := c.find(path)
+	value := c.Find(path)
 	if value == nil {
 		return 0.0
 	}
@@ -110,8 +118,9 @@ func (c *Config) GetFloat64(path string) float64 {
 	}
 }
 
+// GetBoolean method finds the value at the given path and returns it as a Boolean, returns false if the value is not found
 func (c *Config) GetBoolean(path string) bool {
-	value := c.find(path)
+	value := c.Find(path)
 	if value == nil {
 		return false
 	}
@@ -132,7 +141,8 @@ func (c *Config) GetBoolean(path string) bool {
 	}
 }
 
-func (c *Config) find(path string) Value {
+// Find method finds the value at the given path and returns it without casting to any type, returns nil if the value is not found
+func (c *Config) Find(path string) Value {
 	if c.root.Type() != ObjectType {
 		return nil
 	}
@@ -140,20 +150,24 @@ func (c *Config) find(path string) Value {
 
 }
 
+// Value interface represents a value in the configuration tree, all the value types implements this interface
 type Value interface {
 	Type() Type
 	String() string
 }
 
+// String represents a string value
 type String string
 
 func (s String) Type() Type     { return StringType }
 func (s String) String() string { return string(s) }
 
+// Object represents an object node in the configuration tree
 type Object map[string]Value
 
 func (o Object) Type() Type { return ObjectType }
 
+// String method returns the string representation of the Object
 func (o Object) String() string {
 	var builder strings.Builder
 	itemsSize := len(o)
@@ -188,10 +202,12 @@ func (o Object) find(path string) Value {
 	return object[lastKey]
 }
 
+// Array represents an array node in the configuration tree
 type Array []Value
 
 func (a Array) Type() Type { return ArrayType }
 
+// String method returns the string representation of the Array
 func (a Array) String() string {
 	if len(a) == 0 {
 		return "[]"
@@ -207,21 +223,25 @@ func (a Array) String() string {
 	return builder.String()
 }
 
+// Int represents an Integer value
 type Int int
 
 func (i Int) Type() Type     { return NumberType }
 func (i Int) String() string { return strconv.Itoa(int(i)) }
 
+// Float32 represents a Float32 value
 type Float32 float32
 
 func (f Float32) Type() Type     { return NumberType }
 func (f Float32) String() string { return strconv.FormatFloat(float64(f), 'e', -1, 32) }
 
+// Float64 represents a Float64 value
 type Float64 float64
 
 func (f Float64) Type() Type     { return NumberType }
 func (f Float64) String() string { return strconv.FormatFloat(float64(f), 'e', -1, 64) }
 
+// Boolean represents bool value
 type Boolean bool
 
 func NewBooleanFromString(value string) Boolean {
@@ -238,6 +258,7 @@ func NewBooleanFromString(value string) Boolean {
 func (b Boolean) Type() Type     { return BooleanType }
 func (b Boolean) String() string { return strconv.FormatBool(bool(b)) }
 
+// Substitution refers to another value in the configuration tree
 type Substitution struct {
 	path     string
 	optional bool
@@ -245,6 +266,7 @@ type Substitution struct {
 
 func (s *Substitution) Type() Type { return SubstitutionType }
 
+// String method returns the string representation of the Substitution
 func (s *Substitution) String() string {
 	var builder strings.Builder
 	builder.WriteString("${")
@@ -256,12 +278,14 @@ func (s *Substitution) String() string {
 	return builder.String()
 }
 
+// Null represents a null value
 type Null string
 const null Null = "null"
 
 func (n Null) Type() Type     { return NullType }
 func (n Null) String() string { return string(null) }
 
+// Duration represents a duration value
 type Duration time.Duration
 
 func (d Duration) Type() Type     { return StringType }
