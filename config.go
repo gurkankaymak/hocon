@@ -280,6 +280,7 @@ func (s *Substitution) String() string {
 
 // Null represents a null value
 type Null string
+
 const null Null = "null"
 
 func (n Null) Type() Type     { return NullType }

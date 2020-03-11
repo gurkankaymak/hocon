@@ -269,7 +269,7 @@ func TestConfigFind(t *testing.T) {
 }
 
 func TestNewBooleanFromString(t *testing.T) {
-	var testCases = []struct{
+	var testCases = []struct {
 		input    string
 		expected Boolean
 	}{

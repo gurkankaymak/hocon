@@ -601,7 +601,7 @@ func TestValidateIncludeValue(t *testing.T) {
 	t.Run("return the path with quotes removed", func(t *testing.T) {
 		parser := newParser(strings.NewReader(`include "abc.conf"`))
 		advanceScanner(t, parser, `"abc.conf"`)
-		expected := &include{path: "abc.conf", required:false}
+		expected := &include{path: "abc.conf", required: false}
 		got, err := parser.validateIncludeValue()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, expected)
@@ -611,7 +611,7 @@ func TestValidateIncludeValue(t *testing.T) {
 		parser := newParser(strings.NewReader(`include file("abc.conf")`))
 		advanceScanner(t, parser, "file")
 		got, err := parser.validateIncludeValue()
-		expected := &include{path: "abc.conf", required:false}
+		expected := &include{path: "abc.conf", required: false}
 		assertNoError(t, err)
 		assertDeepEqual(t, got, expected)
 	})
@@ -619,7 +619,7 @@ func TestValidateIncludeValue(t *testing.T) {
 	t.Run("return the include token containing the path in classpath(...) with quotes removed and required as 'false'", func(t *testing.T) {
 		parser := newParser(strings.NewReader(`include classpath("abc.conf")`))
 		advanceScanner(t, parser, "classpath")
-		expected := &include{path: "abc.conf", required:false}
+		expected := &include{path: "abc.conf", required: false}
 		got, err := parser.validateIncludeValue()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, expected)
@@ -647,7 +647,7 @@ func TestValidateIncludeValue(t *testing.T) {
 		parser := newParser(strings.NewReader(`include required(file("abc.conf"))`))
 		advanceScanner(t, parser, "required")
 		got, err := parser.validateIncludeValue()
-		expected := &include{path: "abc.conf", required:true}
+		expected := &include{path: "abc.conf", required: true}
 		assertNoError(t, err)
 		assertDeepEqual(t, got, expected)
 	})
@@ -655,7 +655,7 @@ func TestValidateIncludeValue(t *testing.T) {
 	t.Run("return the include token containing the path in required(classpath(...)) with quotes removed and required as 'true'", func(t *testing.T) {
 		parser := newParser(strings.NewReader(`include required(classpath("abc.conf"))`))
 		advanceScanner(t, parser, "required")
-		expected := &include{path: "abc.conf", required:true}
+		expected := &include{path: "abc.conf", required: true}
 		got, err := parser.validateIncludeValue()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, expected)
@@ -830,7 +830,7 @@ func TestExtractValue(t *testing.T) {
 		got, err := parser.extractValue(currentRune)
 		assertNoError(t, err)
 		expected := 1.5
-		assertEquals(t, got, Duration(time.Duration(expected) * time.Second))
+		assertEquals(t, got, Duration(time.Duration(expected)*time.Second))
 	})
 
 	t.Run("extract float value", func(t *testing.T) {
@@ -1014,7 +1014,7 @@ func TestExtractSubstitution(t *testing.T) {
 	t.Run("return adjacentPeriodsError if the substitution path contains two adjacent periods", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a:${b..c}"))
 		advanceScanner(t, parser, "$")
-		expectedError := adjacentPeriodsError(1,7)
+		expectedError := adjacentPeriodsError(1, 7)
 		substitution, err := parser.extractSubstitution()
 		assertError(t, err, expectedError)
 		assertNil(t, substitution)
@@ -1106,9 +1106,9 @@ func TestExtractMultiLineString(t *testing.T) {
 
 func TestIsSubstitution(t *testing.T) {
 	var testCases = []struct {
-		token string
+		token       string
 		peekedToken rune
-		expected bool
+		expected    bool
 	}{
 		{"$", '{', true},
 		{"a", '{', false},
@@ -1142,9 +1142,9 @@ func TestIsUnquotedString(t *testing.T) {
 
 func TestIsMultiLineString(t *testing.T) {
 	var testCases = []struct {
-		token string
+		token       string
 		peekedToken rune
-		expected bool
+		expected    bool
 	}{
 		{`""`, '"', true},
 		{"a", '"', false},

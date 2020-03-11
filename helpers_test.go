@@ -41,7 +41,7 @@ func assertNoError(t *testing.T, err error) {
 	}
 }
 
-func assertError(t *testing.T, err , expected error) {
+func assertError(t *testing.T, err, expected error) {
 	t.Helper()
 	if err == nil {
 		t.Fatalf("expected an error but did not get one")

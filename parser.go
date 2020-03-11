@@ -22,7 +22,7 @@ const (
 	arrayEndToken    = "]"
 	plusEqualsToken  = "+="
 	includeToken     = "include"
-	commentToken	 = "#"
+	commentToken     = "#"
 )
 
 var forbiddenCharacters = map[string]bool{
@@ -72,7 +72,7 @@ func (p *parser) parse() (*Config, error) {
 		return nil, err
 	}
 	if token := p.scanner.TokenText(); token != "" {
-		return nil, invalidObjectError("invalid token " + token, p.scanner.Line, p.scanner.Column)
+		return nil, invalidObjectError("invalid token "+token, p.scanner.Line, p.scanner.Column)
 	}
 	err = resolveSubstitutions(object)
 	if err != nil {
@@ -172,7 +172,7 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 					return nil, adjacentPeriodsError(p.scanner.Line, p.scanner.Column)
 				}
 				if isSeparator(p.scanner.TokenText(), p.scanner.Peek()) {
-					return nil, trailingPeriodError(p.scanner.Line, p.scanner.Column - 1)
+					return nil, trailingPeriodError(p.scanner.Line, p.scanner.Column-1)
 				}
 			}
 			lastRow = p.scanner.Line
@@ -199,7 +199,7 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 				}
 			}
 			root[key] = value
-		case "+" :
+		case "+":
 			if p.scanner.Peek() == '=' {
 				p.scanner.Scan()
 				currentRune := p.scanner.Scan()
@@ -504,7 +504,7 @@ func (p *parser) extractSubstitution() (*Substitution, error) {
 
 		if token == objectEndToken {
 			if previousToken == dotToken {
-				return nil, trailingPeriodError(p.scanner.Line, p.scanner.Column - 1)
+				return nil, trailingPeriodError(p.scanner.Line, p.scanner.Column-1)
 			}
 			parenthesisBalanced = true
 			p.scanner.Scan()
@@ -522,7 +522,7 @@ func (p *parser) extractSubstitution() (*Substitution, error) {
 		return nil, invalidSubstitutionError("missing closing parenthesis", p.scanner.Line, p.scanner.Column)
 	}
 
-	return &Substitution{path: pathBuilder.String(), optional:optional}, nil
+	return &Substitution{path: pathBuilder.String(), optional: optional}, nil
 }
 
 func (p *parser) consumeComment() rune {
