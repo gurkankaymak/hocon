@@ -429,7 +429,7 @@ func (p *parser) extractValue(currentRune rune) (Value, error) {
 			return null, nil
 		case isBooleanString(token):
 			p.scanner.Scan()
-			return NewBooleanFromString(token), nil
+			return newBooleanFromString(token), nil
 		case isUnquotedString(token):
 			p.scanner.Scan()
 			return String(token), nil

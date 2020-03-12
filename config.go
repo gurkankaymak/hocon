@@ -31,7 +31,7 @@ func (c *Config) String() string { return c.root.String() }
 
 // GetObject method finds the value at the given path and returns it as an Object, returns nil if the value is not found
 func (c *Config) GetObject(path string) Object {
-	value := c.Find(path)
+	value := c.Get(path)
 	if value == nil {
 		return nil
 	}
@@ -40,7 +40,7 @@ func (c *Config) GetObject(path string) Object {
 
 // GetArray method finds the value at the given path and returns it as an Array, returns nil if the value is not found
 func (c *Config) GetArray(path string) Array {
-	value := c.Find(path)
+	value := c.Get(path)
 	if value == nil {
 		return nil
 	}
@@ -49,7 +49,7 @@ func (c *Config) GetArray(path string) Array {
 
 // GetString method finds the value at the given path and returns it as a String, returns empty string if the value is not found
 func (c *Config) GetString(path string) string {
-	value := c.Find(path)
+	value := c.Get(path)
 	if value == nil {
 		return ""
 	}
@@ -58,7 +58,7 @@ func (c *Config) GetString(path string) string {
 
 // GetInt method finds the value at the given path and returns it as an Int, returns zero if the value is not found
 func (c *Config) GetInt(path string) int {
-	value := c.Find(path)
+	value := c.Get(path)
 	if value == nil {
 		return 0
 	}
@@ -78,7 +78,7 @@ func (c *Config) GetInt(path string) int {
 
 // GetFloat32 method finds the value at the given path and returns it as a Float32, returns float32(0.0) if the value is not found
 func (c *Config) GetFloat32(path string) float32 {
-	value := c.Find(path)
+	value := c.Get(path)
 	if value == nil {
 		return float32(0.0)
 	}
@@ -100,7 +100,7 @@ func (c *Config) GetFloat32(path string) float32 {
 
 // GetFloat64 method finds the value at the given path and returns it as a Float64, returns 0.0 if the value is not found
 func (c *Config) GetFloat64(path string) float64 {
-	value := c.Find(path)
+	value := c.Get(path)
 	if value == nil {
 		return 0.0
 	}
@@ -122,7 +122,7 @@ func (c *Config) GetFloat64(path string) float64 {
 
 // GetBoolean method finds the value at the given path and returns it as a Boolean, returns false if the value is not found
 func (c *Config) GetBoolean(path string) bool {
-	value := c.Find(path)
+	value := c.Get(path)
 	if value == nil {
 		return false
 	}
@@ -143,8 +143,16 @@ func (c *Config) GetBoolean(path string) bool {
 	}
 }
 
-// Find method finds the value at the given path and returns it without casting to any type, returns nil if the value is not found
-func (c *Config) Find(path string) Value {
+func (c *Config) GetDuration(path string) time.Duration {
+	value := c.Get(path)
+	if value == nil {
+		return 0
+	}
+	return time.Duration(value.(Duration))
+}
+
+// Get method finds the value at the given path and returns it without casting to any type, returns nil if the value is not found
+func (c *Config) Get(path string) Value {
 	if c.root.Type() != ObjectType {
 		return nil
 	}
@@ -252,8 +260,7 @@ func (f Float64) String() string { return strconv.FormatFloat(float64(f), 'e', -
 // Boolean represents bool value
 type Boolean bool
 
-// NewBooleanFromString creates a Boolean value from the given string, it panics if the string cannot be converted to Boolean
-func NewBooleanFromString(value string) Boolean {
+func newBooleanFromString(value string) Boolean {
 	switch value {
 	case "true", "yes", "on":
 		return true

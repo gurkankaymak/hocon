@@ -3,6 +3,7 @@ package hocon
 import (
 	"fmt"
 	"testing"
+	"time"
 )
 
 func TestGetObject(t *testing.T) {
@@ -188,7 +189,25 @@ func TestGetBoolean(t *testing.T) {
 	}
 }
 
-func TestObject_Find(t *testing.T) {
+func TestGetDuration(t *testing.T) {
+	config := &Config{Object{"a": Duration(5 * time.Second), "b": String("bb")}}
+
+	t.Run("get Duration at the given path", func(t *testing.T) {
+		got := config.GetDuration("a")
+		assertEquals(t, got.String(), Duration(5 * time.Second).String())
+	})
+
+	t.Run("return zero for non-existing duration", func(t *testing.T) {
+		got := config.GetDuration("c")
+		assertEquals(t, got.String(), Duration(0).String())
+	})
+
+	t.Run("panic if the value is not a duration", func(t *testing.T) {
+		assertPanic(t, func() { config.GetDuration("b") })
+	})
+}
+
+func TestFind(t *testing.T) {
 	t.Run("return nil if path does not contain any dot and there is no value with the given path", func(t *testing.T) {
 		object := Object{"a": Int(1)}
 		got := object.find("b")
@@ -227,7 +246,9 @@ func TestObject_String(t *testing.T) {
 
 	t.Run("return the string of an object that contains multiple elements", func(t *testing.T) {
 		got := Object{"a": Int(1), "b": Int(2)}.String()
-		assertEquals(t, got, "{a:1, b:2}")
+		if got != "{a:1, b:2}" && got != "{b:2, a:1}" {
+			fail(t, got, "{a:1, b:2}")
+		}
 	})
 }
 
@@ -248,22 +269,22 @@ func TestArray_String(t *testing.T) {
 	})
 }
 
-func TestConfigFind(t *testing.T) {
+func TestGet(t *testing.T) {
 	t.Run("return nil if the root of config is not an Object", func(t *testing.T) {
 		config := &Config{Array{Int(1)}}
-		got := config.Find("a")
+		got := config.Get("a")
 		assertNil(t, got)
 	})
 
 	t.Run("find the value if the root of config is an object and a value exist with the given path", func(t *testing.T) {
 		config := &Config{Object{"a": Int(1)}}
-		got := config.Find("a")
+		got := config.Get("a")
 		assertEquals(t, got, Int(1))
 	})
 
 	t.Run("return nil if the root of config is an object but value with the given path does not exist", func(t *testing.T) {
 		config := &Config{Object{"a": Int(1)}}
-		got := config.Find("b")
+		got := config.Get("b")
 		assertNil(t, got)
 	})
 }
@@ -283,14 +304,14 @@ func TestNewBooleanFromString(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("create the Boolean(%s) from the input string: %s", tc.expected, tc.input), func(t *testing.T) {
-			got := NewBooleanFromString(tc.input)
+			got := newBooleanFromString(tc.input)
 			assertEquals(t, got, tc.expected)
 		})
 	}
 
 	t.Run("panic if the given string is not a boolean string", func(t *testing.T) {
 		nonBooleanString := "nonBooleanString"
-		assertPanic(t, func() { NewBooleanFromString(nonBooleanString) }, fmt.Sprintf("cannot parse value: %s to boolean!", nonBooleanString))
+		assertPanic(t, func() { newBooleanFromString(nonBooleanString) }, fmt.Sprintf("cannot parse value: %s to Boolean!", nonBooleanString))
 	})
 }
 
