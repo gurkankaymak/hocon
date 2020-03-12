@@ -1,6 +1,7 @@
 # HOCON (Human-Optimized Config Object Notation)
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/gurkankaymak/hocon)](https://goreportcard.com/report/github.com/gurkankaymak/hocon)
+[![Build Status](https://travis-ci.org/gurkankaymak/hocon.svg?branch=master)](https://travis-ci.org/gurkankaymak/hocon)
 [![GoDoc](https://godoc.org/github.com/gurkankaymak/hocon?status.svg)](https://godoc.org/github.com/gurkankaymak/hocon)
 
 Configuration library for working with the Lightbend's HOCON format. HOCON is a human-friendly JSON superset
