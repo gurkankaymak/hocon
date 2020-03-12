@@ -96,15 +96,15 @@ func main() {
     objectValue := conf.GetObject("objects.valueObject")
     arrayValue := conf.GetArray("arrays.ofInt")
     stringValue := conf.GetString("strings.a")
-    intValue := conf.GetInt("numbers.int")
+    intValue := conf.GetInt("numbers.intVal")
     floatValue := conf.GetFloat64("numbers.floatVal")
     durationValue := conf.GetDuration("durations.second")
-    fmt.Println("objectValue:", objectValue)
-    fmt.Println("arrayValue:", arrayValue)
-    fmt.Println("stringValue:", stringValue)
-    fmt.Println("intValue:", intValue)
-    fmt.Println("floatValue:", floatValue)
-    fmt.Println("durationValue:", durationValue)
+    fmt.Println("objectValue:", objectValue) // {mandatoryValue:mandatoryValue, arrayValue:[1,2,3], nullValue:null}
+    fmt.Println("arrayValue:", arrayValue) // [1,2,3]
+    fmt.Println("stringValue:", stringValue) // a
+    fmt.Println("intValue:", intValue) // 3
+    fmt.Println("floatValue:", floatValue) // 1.0
+    fmt.Println("durationValue:", durationValue) // 1s
     fmt.Println("all configuration:", conf)
 }
 ```
