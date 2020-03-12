@@ -45,6 +45,7 @@ package main
 
 import (
     "fmt"
+    "log"
     "github.com/gurkankaymak/hocon"
 )
 
@@ -90,7 +91,7 @@ func main() {
 
     conf, err := hocon.ParseResource(hoconString)
     if err != nil {
-        fmt.Errorf("error while parsing configuration: %w", err)
+        log.Fatal("error while parsing configuration: ", err)
     }
     objectValue := conf.GetObject("objects.valueObject")
     arrayValue := conf.GetArray("arrays.ofInt")
