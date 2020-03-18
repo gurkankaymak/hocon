@@ -126,7 +126,7 @@ func TestParse(t *testing.T) {
 func TestExtractObject(t *testing.T) {
 	t.Run("extract empty object", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{}"))
-		parser.scanner.Scan() // move scanner to the first token for the test case
+		parser.advance() // move scanner to the first token for the test case
 		got, err := parser.extractObject()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, Object{})
@@ -134,7 +134,7 @@ func TestExtractObject(t *testing.T) {
 
 	t.Run("extract object with the root braces omitted", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a=1"))
-		parser.scanner.Scan()
+		parser.advance()
 		got, err := parser.extractObject()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, Object{"a": Int(1)})
@@ -142,7 +142,7 @@ func TestExtractObject(t *testing.T) {
 
 	t.Run("extract simple object", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a=1}"))
-		parser.scanner.Scan()
+		parser.advance()
 		got, err := parser.extractObject()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, Object{"a": Int(1)})
@@ -150,7 +150,7 @@ func TestExtractObject(t *testing.T) {
 
 	t.Run("extract nested object", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a.b:1,c:2}"))
-		parser.scanner.Scan()
+		parser.advance()
 		got, err := parser.extractObject()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, Object{"a": Object{"b": Int(1)}, "c": Int(2)})
@@ -163,7 +163,7 @@ func TestExtractObject(t *testing.T) {
 		}
 		`
 		parser := newParser(strings.NewReader(config))
-		parser.scanner.Scan()
+		parser.advance()
 		got, err := parser.extractObject()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, Object{"a": Int(1)})
@@ -171,7 +171,7 @@ func TestExtractObject(t *testing.T) {
 
 	t.Run("return the error if any error occurs in parseIncludedResource method", func(t *testing.T) {
 		parser := newParser(strings.NewReader(`{include "testdata/array.conf"}`))
-		parser.scanner.Scan()
+		parser.advance()
 		expectedErr := invalidValueError("included file cannot contain an array as the root value", 1, 10)
 		got, err := parser.extractObject()
 		assertError(t, err, expectedErr)
@@ -180,7 +180,7 @@ func TestExtractObject(t *testing.T) {
 
 	t.Run("merge the included object with the existing", func(t *testing.T) {
 		parser := newParser(strings.NewReader(`b:2, include "testdata/a.conf"`))
-		parser.scanner.Scan()
+		parser.advance()
 		expected := Object{"a": Int(1), "b": Int(2)}
 		got, err := parser.extractObject()
 		assertNoError(t, err)
@@ -191,7 +191,7 @@ func TestExtractObject(t *testing.T) {
 		t.Run(fmt.Sprintf("return error if the key contains the forbidden character: %q", forbiddenChar), func(t *testing.T) {
 			if forbiddenChar != "`" && forbiddenChar != `"` && forbiddenChar != "}" && forbiddenChar != "#" {
 				parser := newParser(strings.NewReader(fmt.Sprintf("{%s:1}", forbiddenChar)))
-				parser.scanner.Scan()
+				parser.advance()
 				expectedError := invalidKeyError(forbiddenChar, 1, 2)
 				got, err := parser.extractObject()
 				assertError(t, err, expectedError)
@@ -202,7 +202,7 @@ func TestExtractObject(t *testing.T) {
 
 	t.Run("return a leadingPeriodError if the key starts with a period '.'", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{.a:1}"))
-		parser.scanner.Scan()
+		parser.advance()
 		expectedError := leadingPeriodError(1, 2)
 		got, err := parser.extractObject()
 		assertError(t, err, expectedError)
@@ -211,7 +211,7 @@ func TestExtractObject(t *testing.T) {
 
 	t.Run("return a adjacentPeriodsError if the key contains two adjacent periods", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a..b:1}"))
-		parser.scanner.Scan()
+		parser.advance()
 		expectedError := adjacentPeriodsError(1, 4)
 		got, err := parser.extractObject()
 		assertError(t, err, expectedError)
@@ -220,7 +220,7 @@ func TestExtractObject(t *testing.T) {
 
 	t.Run("return a trailingPeriodError if the ends with a period", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a.:1}"))
-		parser.scanner.Scan()
+		parser.advance()
 		expectedError := trailingPeriodError(1, 3)
 		got, err := parser.extractObject()
 		assertError(t, err, expectedError)
@@ -229,7 +229,7 @@ func TestExtractObject(t *testing.T) {
 
 	t.Run("return the error if any error occurs while extracting the sub-object (with object start token after key)", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a{.b:1}}"))
-		parser.scanner.Scan()
+		parser.advance()
 		expectedError := leadingPeriodError(1, 4)
 		got, err := parser.extractObject()
 		assertError(t, err, expectedError)
@@ -238,7 +238,7 @@ func TestExtractObject(t *testing.T) {
 
 	t.Run("return the error if any error occurs while extracting the sub-object (with path expression as key)", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a.b.:1}"))
-		parser.scanner.Scan()
+		parser.advance()
 		expectedError := trailingPeriodError(1, 5)
 		got, err := parser.extractObject()
 		assertError(t, err, expectedError)
@@ -247,7 +247,7 @@ func TestExtractObject(t *testing.T) {
 
 	t.Run("return the error if any error occurs in extractValue method after equals separator", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a=&}"))
-		parser.scanner.Scan()
+		parser.advance()
 		expectedError := invalidValueError(fmt.Sprintf("unknown value: %q", "&"), 1, 4)
 		got, err := parser.extractObject()
 		assertError(t, err, expectedError)
@@ -256,7 +256,7 @@ func TestExtractObject(t *testing.T) {
 
 	t.Run("return merged object if the current value (after equals separator) is object and there is an existing object with the same key", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a={b:1},a={c:2}}"))
-		parser.scanner.Scan()
+		parser.advance()
 		expected := Object{"a": Object{"b": Int(1), "c": Int(2)}}
 		got, err := parser.extractObject()
 		assertNoError(t, err)
@@ -265,7 +265,7 @@ func TestExtractObject(t *testing.T) {
 
 	t.Run("override the existing value if the current value (after equals separator) is object and there is an existing non-object with the same key", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a=1,a={c:2}}"))
-		parser.scanner.Scan()
+		parser.advance()
 		expected := Object{"a": Object{"c": Int(2)}}
 		got, err := parser.extractObject()
 		assertNoError(t, err)
@@ -274,7 +274,7 @@ func TestExtractObject(t *testing.T) {
 
 	t.Run("override the existing value if the current value (after equals separator) is not object", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a={b:1},a=2}"))
-		parser.scanner.Scan()
+		parser.advance()
 		expected := Object{"a": Int(2)}
 		got, err := parser.extractObject()
 		assertNoError(t, err)
@@ -283,7 +283,7 @@ func TestExtractObject(t *testing.T) {
 
 	t.Run("return the error if any error occurs in extractValue method after colon separator", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a:&}"))
-		parser.scanner.Scan()
+		parser.advance()
 		expectedError := invalidValueError(fmt.Sprintf("unknown value: %q", "&"), 1, 4)
 		got, err := parser.extractObject()
 		assertError(t, err, expectedError)
@@ -292,7 +292,7 @@ func TestExtractObject(t *testing.T) {
 
 	t.Run("return merged object if the current value (after colon separator) is object and there is an existing object with the same key", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a:{b:1},a:{c:2}}"))
-		parser.scanner.Scan()
+		parser.advance()
 		expected := Object{"a": Object{"b": Int(1), "c": Int(2)}}
 		got, err := parser.extractObject()
 		assertNoError(t, err)
@@ -301,7 +301,7 @@ func TestExtractObject(t *testing.T) {
 
 	t.Run("override the existing value if the current value (after colon separator) is object and there is an existing non-object with the same key", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a:1,a:{c:2}}"))
-		parser.scanner.Scan()
+		parser.advance()
 		expected := Object{"a": Object{"c": Int(2)}}
 		got, err := parser.extractObject()
 		assertNoError(t, err)
@@ -310,7 +310,7 @@ func TestExtractObject(t *testing.T) {
 
 	t.Run("override the existing value if the current value (after colon separator) is not object", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a:{b:1},a:2}"))
-		parser.scanner.Scan()
+		parser.advance()
 		expected := Object{"a": Int(2)}
 		got, err := parser.extractObject()
 		assertNoError(t, err)
@@ -319,7 +319,7 @@ func TestExtractObject(t *testing.T) {
 
 	t.Run("return the error if any error occurs in parsePlusEquals method", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a:1,a+=2}"))
-		parser.scanner.Scan()
+		parser.advance()
 		expectedError := invalidValueError(fmt.Sprintf("value: %q of the key: %q is not an array", "1", "a"), 1, 10)
 		got, err := parser.extractObject()
 		assertError(t, err, expectedError)
@@ -328,7 +328,7 @@ func TestExtractObject(t *testing.T) {
 
 	t.Run("extract object with the += separator", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a+=1}"))
-		parser.scanner.Scan()
+		parser.advance()
 		expected := Object{"a": Array{Int(1)}}
 		got, err := parser.extractObject()
 		assertNoError(t, err)
@@ -337,7 +337,7 @@ func TestExtractObject(t *testing.T) {
 
 	t.Run("return error if '=' does not exist after '+'", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a+1}"))
-		parser.scanner.Scan()
+		parser.advance()
 		expectedError := invalidKeyError("+", 1, 3)
 		got, err := parser.extractObject()
 		assertError(t, err, expectedError)
@@ -354,7 +354,7 @@ func TestExtractObject(t *testing.T) {
 
 	t.Run("return missingCommaError if there is no comma or ASCII newline between the object elements", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a:1 b:2}"))
-		parser.scanner.Scan()
+		parser.advance()
 		expectedError := missingCommaError(1, 6)
 		got, err := parser.extractObject()
 		assertError(t, err, expectedError)
@@ -363,7 +363,7 @@ func TestExtractObject(t *testing.T) {
 
 	t.Run("skip comma between the object elements", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a:1,b:2}"))
-		parser.scanner.Scan()
+		parser.advance()
 		got, err := parser.extractObject()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, Object{"a": Int(1), "b": Int(2)})
@@ -371,7 +371,7 @@ func TestExtractObject(t *testing.T) {
 
 	t.Run("return adjacentCommasError if there are two adjacent commas between the elements of the object", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a:1,,b:2}"))
-		parser.scanner.Scan()
+		parser.advance()
 		expectedError := adjacentCommasError(1, 6)
 		got, err := parser.extractObject()
 		assertError(t, err, expectedError)
@@ -380,7 +380,7 @@ func TestExtractObject(t *testing.T) {
 
 	t.Run("return invalidObjectError if parenthesis do not match", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a:1"))
-		parser.scanner.Scan()
+		parser.advance()
 		expectedError := invalidObjectError("parenthesis do not match", 1, 5)
 		got, err := parser.extractObject()
 		assertError(t, err, expectedError)
@@ -489,46 +489,46 @@ func TestResolveSubstitutions(t *testing.T) {
 func TestParsePlusEqualsValue(t *testing.T) {
 	t.Run("create an array that contains the value if the existingItems map does not contain a value with the given key", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a += 42"))
-		currentRune := advanceScanner(t, parser, "42")
+		advanceScanner(t, parser, "42")
 		existingItems := Object{}
 		expected := Object{"a": Array{Int(42)}}
-		err := parser.parsePlusEqualsValue(existingItems, "a", currentRune)
+		err := parser.parsePlusEqualsValue(existingItems, "a")
 		assertNoError(t, err)
 		assertDeepEqual(t, existingItems, expected)
 	})
 
 	t.Run("return the error received from extractValue method if any, if the existingItems map does not contain a value with the given key", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a += [42"))
-		currentRune := advanceScanner(t, parser, "[")
-		err := parser.parsePlusEqualsValue(Object{}, "a", currentRune)
+		advanceScanner(t, parser, "[")
+		err := parser.parsePlusEqualsValue(Object{}, "a")
 		expectedError := invalidArrayError("parenthesis do not match", 1, 7)
 		assertError(t, err, expectedError)
 	})
 
 	t.Run("return an error if the existingItems map contains non-array value with the given key", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a: 1, a += 42"))
-		currentRune := advanceScanner(t, parser, "42")
+		advanceScanner(t, parser, "42")
 		existingItems := Object{"a": Int(1)}
-		err := parser.parsePlusEqualsValue(existingItems, "a", currentRune)
+		err := parser.parsePlusEqualsValue(existingItems, "a")
 		expectedError := invalidValueError(fmt.Sprintf("value: %q of the key: %q is not an array", "1", "a"), 1, 14)
 		assertError(t, err, expectedError)
 	})
 
 	t.Run("return the error received from extractValue method if any, if the existingItems map contains an array with the given key", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a: [5], a += {42"))
-		currentRune := advanceScanner(t, parser, "{")
+		advanceScanner(t, parser, "{")
 		existingItems := Object{"a": Array{Int(5)}}
-		err := parser.parsePlusEqualsValue(existingItems, "a", currentRune)
+		err := parser.parsePlusEqualsValue(existingItems, "a")
 		expectedError := invalidObjectError("parenthesis do not match", 1, 15)
 		assertError(t, err, expectedError)
 	})
 
 	t.Run("append the value if the existingItems map contains an array with the given key", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a: [5], a += 42"))
-		currentRune := advanceScanner(t, parser, "42")
+		advanceScanner(t, parser, "42")
 		existingItems := Object{"a": Array{Int(5)}}
 		expected := Object{"a": Array{Int(5), Int(42)}}
-		err := parser.parsePlusEqualsValue(existingItems, "a", currentRune)
+		err := parser.parsePlusEqualsValue(existingItems, "a")
 		assertNoError(t, err)
 		assertDeepEqual(t, existingItems, expected)
 	})
@@ -710,7 +710,7 @@ func TestParseIncludedResource(t *testing.T) {
 func TestExtractArray(t *testing.T) {
 	t.Run("return invalidArray error if the first token is not '['", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a:1}"))
-		parser.scanner.Scan()
+		parser.advance()
 		expectedError := invalidArrayError(fmt.Sprintf("%q is not an array start token", "{"), 1, 1)
 		got, err := parser.extractArray()
 		assertError(t, err, expectedError)
@@ -719,7 +719,7 @@ func TestExtractArray(t *testing.T) {
 
 	t.Run("return leadingCommaError if the array starts with a comma", func(t *testing.T) {
 		parser := newParser(strings.NewReader("[,1]"))
-		parser.scanner.Scan()
+		parser.advance()
 		expectedError := leadingCommaError(1, 2)
 		got, err := parser.extractArray()
 		assertError(t, err, expectedError)
@@ -728,7 +728,7 @@ func TestExtractArray(t *testing.T) {
 
 	t.Run("extract the empty array", func(t *testing.T) {
 		parser := newParser(strings.NewReader("[]"))
-		parser.scanner.Scan()
+		parser.advance()
 		got, err := parser.extractArray()
 		assertNoError(t, err)
 		assertEquals(t, len(got), 0)
@@ -736,7 +736,7 @@ func TestExtractArray(t *testing.T) {
 
 	t.Run("return the error if any error occurs in extractValue method", func(t *testing.T) {
 		parser := newParser(strings.NewReader("[&a]"))
-		parser.scanner.Scan()
+		parser.advance()
 		expectedError := invalidValueError(fmt.Sprintf("unknown value: %q", "&"), 1, 2)
 		got, err := parser.extractArray()
 		assertError(t, err, expectedError)
@@ -745,7 +745,7 @@ func TestExtractArray(t *testing.T) {
 
 	t.Run("return invalidArrayError if the closing parenthesis is missing", func(t *testing.T) {
 		parser := newParser(strings.NewReader("[1"))
-		parser.scanner.Scan()
+		parser.advance()
 		expectedError := invalidArrayError("parenthesis do not match", 1, 2)
 		got, err := parser.extractArray()
 		assertError(t, err, expectedError)
@@ -754,7 +754,7 @@ func TestExtractArray(t *testing.T) {
 
 	t.Run("return missingCommaError if there is no comma or ASCII newline between the array elements", func(t *testing.T) {
 		parser := newParser(strings.NewReader("[1 2]"))
-		parser.scanner.Scan()
+		parser.advance()
 		expectedError := missingCommaError(1, 4)
 		got, err := parser.extractArray()
 		assertError(t, err, expectedError)
@@ -763,7 +763,7 @@ func TestExtractArray(t *testing.T) {
 
 	t.Run("return adjacentCommasError if there are two adjacent commas between the elements of the array", func(t *testing.T) {
 		parser := newParser(strings.NewReader("[1,,2]"))
-		parser.scanner.Scan()
+		parser.advance()
 		expectedError := adjacentCommasError(1, 4)
 		got, err := parser.extractArray()
 		assertError(t, err, expectedError)
@@ -772,7 +772,7 @@ func TestExtractArray(t *testing.T) {
 
 	t.Run("extract the array without an error even if the array ends with a comma", func(t *testing.T) {
 		parser := newParser(strings.NewReader("[1,]"))
-		parser.scanner.Scan()
+		parser.advance()
 		got, err := parser.extractArray()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, Array{Int(1)})
@@ -780,7 +780,7 @@ func TestExtractArray(t *testing.T) {
 
 	t.Run("extract the array without an error if if elements are separated with ASCII newline", func(t *testing.T) {
 		parser := newParser(strings.NewReader("[1\n2]"))
-		parser.scanner.Scan()
+		parser.advance()
 		got, err := parser.extractArray()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, Array{Int(1), Int(2)})
@@ -788,7 +788,7 @@ func TestExtractArray(t *testing.T) {
 
 	t.Run("extract the array", func(t *testing.T) {
 		parser := newParser(strings.NewReader("[1, 2]"))
-		parser.scanner.Scan()
+		parser.advance()
 		expected := Array{Int(1), Int(2)}
 		got, err := parser.extractArray()
 		assertNoError(t, err)
@@ -802,32 +802,32 @@ func TestExtractValue(t *testing.T) {
 			a: # this is a comment
 			1`
 		parser := newParser(strings.NewReader(config))
-		currentRune := advanceScanner(t, parser, "#")
-		got, err := parser.extractValue(currentRune)
+		advanceScanner(t, parser, "#")
+		got, err := parser.extractValue()
 		assertNoError(t, err)
 		assertEquals(t, got, Int(1))
 	})
 
 	t.Run("extract int duration", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a:1 second"))
-		currentRune := advanceScanner(t, parser, "1")
-		got, err := parser.extractValue(currentRune)
+		advanceScanner(t, parser, "1")
+		got, err := parser.extractValue()
 		assertNoError(t, err)
 		assertEquals(t, got, Duration(time.Second))
 	})
 
 	t.Run("extract int value", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a:1"))
-		currentRune := advanceScanner(t, parser, "1")
-		got, err := parser.extractValue(currentRune)
+		advanceScanner(t, parser, "1")
+		got, err := parser.extractValue()
 		assertNoError(t, err)
 		assertEquals(t, got, Int(1))
 	})
 
 	t.Run("extract float value", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a:1.5 seconds"))
-		currentRune := advanceScanner(t, parser, "1.5")
-		got, err := parser.extractValue(currentRune)
+		advanceScanner(t, parser, "1.5")
+		got, err := parser.extractValue()
 		assertNoError(t, err)
 		expected := 1.5
 		assertEquals(t, got, Duration(time.Duration(expected)*time.Second))
@@ -835,8 +835,8 @@ func TestExtractValue(t *testing.T) {
 
 	t.Run("extract float value", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a:1.5"))
-		currentRune := advanceScanner(t, parser, "1.5")
-		got, err := parser.extractValue(currentRune)
+		advanceScanner(t, parser, "1.5")
+		got, err := parser.extractValue()
 		assertNoError(t, err)
 		assertEquals(t, got, Float64(1.5))
 	})
@@ -847,28 +847,28 @@ func TestExtractValue(t *testing.T) {
 			multi-line string
 		"""`
 		parser := newParser(strings.NewReader(config))
-		currentRune := advanceScanner(t, parser, `""`)
+		advanceScanner(t, parser, `""`)
 		expected := String(`
 			this is a
 			multi-line string
 		`)
-		got, err := parser.extractValue(currentRune)
+		got, err := parser.extractValue()
 		assertNoError(t, err)
 		assertEquals(t, got, expected)
 	})
 
 	t.Run("extract string value", func(t *testing.T) {
 		parser := newParser(strings.NewReader(`a:"b"`))
-		currentRune := advanceScanner(t, parser, `"b"`)
-		got, err := parser.extractValue(currentRune)
+		advanceScanner(t, parser, `"b"`)
+		got, err := parser.extractValue()
 		assertNoError(t, err)
 		assertEquals(t, got, String("b"))
 	})
 
 	t.Run("extract null value", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a:null"))
-		currentRune := advanceScanner(t, parser, "null")
-		got, err := parser.extractValue(currentRune)
+		advanceScanner(t, parser, "null")
+		got, err := parser.extractValue()
 		assertNoError(t, err)
 		assertEquals(t, got, null)
 	})
@@ -888,8 +888,8 @@ func TestExtractValue(t *testing.T) {
 	for _, tc := range booleanTestCases {
 		t.Run(fmt.Sprintf("extract boolean value: %q", tc.input), func(t *testing.T) {
 			parser := newParser(strings.NewReader(fmt.Sprintf("a:%s", tc.input)))
-			currentRune := advanceScanner(t, parser, tc.input)
-			got, err := parser.extractValue(currentRune)
+			advanceScanner(t, parser, tc.input)
+			got, err := parser.extractValue()
 			assertNoError(t, err)
 			assertEquals(t, got, tc.expected)
 		})
@@ -897,42 +897,42 @@ func TestExtractValue(t *testing.T) {
 
 	t.Run("extract unquoted string value", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a:bbb"))
-		currentRune := advanceScanner(t, parser, "bbb")
-		got, err := parser.extractValue(currentRune)
+		advanceScanner(t, parser, "bbb")
+		got, err := parser.extractValue()
 		assertNoError(t, err)
 		assertEquals(t, got, String("bbb"))
 	})
 
 	t.Run("extract object value", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a:{b:1}"))
-		currentRune := advanceScanner(t, parser, "{")
-		got, err := parser.extractValue(currentRune)
+		advanceScanner(t, parser, "{")
+		got, err := parser.extractValue()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, Object{"b": Int(1)})
 	})
 
 	t.Run("extract array value", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a:[1]"))
-		currentRune := advanceScanner(t, parser, "[")
-		got, err := parser.extractValue(currentRune)
+		advanceScanner(t, parser, "[")
+		got, err := parser.extractValue()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, Array{Int(1)})
 	})
 
 	t.Run("extract substitution value", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a:${b}"))
-		currentRune := advanceScanner(t, parser, "$")
+		advanceScanner(t, parser, "$")
 		expected := &Substitution{"b", false}
-		got, err := parser.extractValue(currentRune)
+		got, err := parser.extractValue()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, expected)
 	})
 
 	t.Run("return error for an unknown value", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a:&"))
-		currentRune := advanceScanner(t, parser, "&")
+		advanceScanner(t, parser, "&")
 		expectedError := invalidValueError(fmt.Sprintf("unknown value: %q", "&"), 1, 3)
-		got, err := parser.extractValue(currentRune)
+		got, err := parser.extractValue()
 		assertError(t, err, expectedError)
 		assertNil(t, got)
 	})
