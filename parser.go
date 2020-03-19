@@ -34,6 +34,7 @@ var forbiddenCharacters = map[string]bool{
 type parser struct {
 	scanner *scanner.Scanner
 	currentRune rune
+	root Value // stored for resolving concatenated substitutions
 }
 
 func newParser(src io.Reader) *parser {
@@ -132,7 +133,10 @@ func processSubstitution(root Object, value Value, resolveFunc func(value Value)
 }
 
 func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
-	root := Object{}
+	object := Object{}
+	if p.root == nil {
+		p.root = object
+	}
 	parenthesisBalanced := true
 
 	if p.scanner.TokenText() == objectStartToken {
@@ -141,7 +145,7 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 		if !parenthesisBalanced && p.scanner.TokenText() == objectEndToken {
 			parenthesisBalanced = true
 			p.advance()
-			return root, nil
+			return object, nil
 		}
 	}
 	lastRow := 0
@@ -156,7 +160,7 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 			if err != nil {
 				return nil, err
 			}
-			mergeObjects(root, includedObject)
+			mergeObjects(object, includedObject)
 			p.advance()
 		}
 
@@ -181,11 +185,11 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 				}
 			}
 			lastRow = p.scanner.Line
-			object, err := p.extractObject(true)
+			extractedObject, err := p.extractObject(true)
 			if err != nil {
 				return nil, err
 			}
-			root[key] = object
+			object[key] = extractedObject
 		}
 
 		switch text {
@@ -197,18 +201,18 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 				return nil, err
 			}
 
-			if object, ok := value.(Object); ok {
-				if existingObject, ok := root[key].(Object); ok {
-					mergeObjects(existingObject, object)
-					value = existingObject
+			if value.Type() == ObjectType {
+				if existingValue, ok := object[key]; ok && existingValue.Type() == ObjectType {
+					mergeObjects(existingValue.(Object), value.(Object))
+					value = existingValue
 				}
 			}
-			root[key] = value
+			object[key] = value
 		case "+":
 			if p.scanner.Peek() == '=' {
 				p.advance()
 				p.advance()
-				err := p.parsePlusEqualsValue(root, key)
+				err := p.parsePlusEqualsValue(object, key)
 				if err != nil {
 					return nil, err
 				}
@@ -216,7 +220,7 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 		}
 
 		if parenthesisBalanced && len(isSubObject) > 0 && isSubObject[0] {
-			return root, nil
+			return object, nil
 		}
 
 		if p.scanner.Line == lastRow && p.scanner.TokenText() != commaToken && p.scanner.TokenText() != objectEndToken && p.scanner.Peek() != scanner.EOF {
@@ -240,7 +244,7 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 	if !parenthesisBalanced {
 		return nil, invalidObjectError("parenthesis do not match", p.scanner.Line, p.scanner.Column)
 	}
-	return root, nil
+	return object, nil
 }
 
 func mergeObjects(existing Object, new Object) {
