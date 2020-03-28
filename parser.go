@@ -34,7 +34,6 @@ var forbiddenCharacters = map[string]bool{
 type parser struct {
 	scanner *scanner.Scanner
 	currentRune rune
-	root Value // stored for resolving concatenated substitutions
 }
 
 func newParser(src io.Reader) *parser {
@@ -103,6 +102,13 @@ func resolveSubstitutions(root Object, valueOptional ...Value) error {
 				return err
 			}
 		}
+	case Concatenation:
+		for i, value := range v {
+			err := processSubstitution(root, value, func(foundValue Value) { v[i] = foundValue })
+			if err != nil {
+				return err
+			}
+		}
 	case Object:
 		for key, value := range v {
 			err := processSubstitution(root, value, func(foundValue Value) { v[key] = foundValue })
@@ -126,7 +132,7 @@ func processSubstitution(root Object, value Value, resolveFunc func(value Value)
 		} else if !substitution.optional {
 			return errors.New("could not resolve substitution: " + substitution.String() + " to a value")
 		}
-	} else if valueType == ObjectType || valueType == ArrayType {
+	} else if valueType == ObjectType || valueType == ArrayType || valueType == ConcatenationType {
 		return resolveSubstitutions(root, value)
 	}
 	return nil
@@ -134,9 +140,6 @@ func processSubstitution(root Object, value Value, resolveFunc func(value Value)
 
 func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 	object := Object{}
-	if p.root == nil {
-		p.root = object
-	}
 	parenthesisBalanced := true
 
 	if p.scanner.TokenText() == objectStartToken {
@@ -221,6 +224,16 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 
 		if parenthesisBalanced && len(isSubObject) > 0 && isSubObject[0] {
 			return object, nil
+		}
+
+		for currentRow := p.scanner.Line; currentRow == lastRow && p.scanner.TokenText() != ""; currentRow = p.scanner.Line {
+			concatenated, err := p.checkAndConcatenate(object, key)
+			if err != nil {
+				return nil, err
+			}
+			if !concatenated {
+				break
+			}
 		}
 
 		if p.scanner.Line == lastRow && p.scanner.TokenText() != commaToken && p.scanner.TokenText() != objectEndToken && p.scanner.Peek() != scanner.EOF {
@@ -345,6 +358,22 @@ func (p *parser) parseIncludedResource() (includeObject Object, err error) {
 	}
 
 	return includeParser.extractObject()
+}
+
+func (p *parser) checkAndConcatenate(object Object, key string) (bool, error) {
+	if lastValue, ok := object[key]; ok && lastValue.isConcatenable() && p.isTokenConcatenable(p.scanner.TokenText(), p.scanner.Peek()) {
+		value, err := p.extractValue()
+		if err != nil {
+			return false, err
+		}
+		if lastValue.Type() == ConcatenationType {
+			object[key] = append(lastValue.(Concatenation), value)
+		} else {
+			object[key] = Concatenation{lastValue, value}
+		}
+		return true, nil
+	}
+	return false, nil
 }
 
 func (p *parser) extractArray() (Array, error) {
@@ -560,6 +589,10 @@ func (p *parser) extractMultiLineString() (String, error) {
 		return String(multiLineBuilder.String()[:multiLineBuilder.Len()-3]), nil
 	}
 	return "", unclosedMultiLineStringError()
+}
+
+func (p *parser) isTokenConcatenable(currentText string, peeked rune) bool {
+	return isSubstitution(currentText, peeked) || isUnquotedString(currentText) || (p.currentRune == scanner.String && !isMultiLineString(currentText, peeked))
 }
 
 func isBooleanString(token string) bool {

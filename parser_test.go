@@ -352,6 +352,30 @@ func TestExtractObject(t *testing.T) {
 		assertDeepEqual(t, got, Object{"b": Int(1)})
 	})
 
+	t.Run("return the error if any error occurs while concatenating", func(t *testing.T) {
+		parser := newParser(strings.NewReader("a:b ${"))
+		parser.advance()
+		got, err := parser.extractObject()
+		assertError(t, err, invalidSubstitutionError("missing closing parenthesis", 1, 7))
+		assertNil(t, got)
+	})
+
+	t.Run("should break the concatenation loop if the checkAndConcatenate method returns false", func(t *testing.T) {
+		parser := newParser(strings.NewReader("a:[1] bb, c:d"))
+		parser.advance()
+		got, err := parser.extractObject()
+		assertError(t, err, missingCommaError(1, 7))
+		assertNil(t, got)
+	})
+
+	t.Run("concatenate multiple values if they are concatenable and in the same line", func(t *testing.T) {
+		parser := newParser(strings.NewReader("a:bb cc dd"))
+		parser.advance()
+		got, err := parser.extractObject()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, Object{"a": Concatenation{String("bb"), String("cc"), String("dd")}})
+	})
+
 	t.Run("return missingCommaError if there is no comma or ASCII newline between the object elements", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a:1 b:2}"))
 		parser.advance()
@@ -470,14 +494,37 @@ func TestResolveSubstitutions(t *testing.T) {
 		assertError(t, err, expectedError)
 	})
 
-	t.Run("return error for non-existing substitution path inside an array", func(t *testing.T) {
+	t.Run("ignore the optional substitution inside an array if it's path does not exist", func(t *testing.T) {
 		subArray := Array{&Substitution{"a", true}}
 		object := Object{"a": Int(5), "b": subArray}
 		err := resolveSubstitutions(object, subArray)
 		assertNoError(t, err)
 	})
 
-	t.Run("return array if subConfig is not an object or array", func(t *testing.T) {
+	t.Run("resolve valid substitution inside a concatenation", func(t *testing.T) {
+		concatenation := Concatenation{&Substitution{"a", false}}
+		object := Object{"a": Int(5), "b": concatenation}
+		err := resolveSubstitutions(object, concatenation)
+		assertNoError(t, err)
+	})
+
+	t.Run("return error for non-existing substitution path inside an concatenation", func(t *testing.T) {
+		substitution := &Substitution{"c", false}
+		concatenation := Concatenation{substitution}
+		object := Object{"a": Int(5), "b": concatenation}
+		err := resolveSubstitutions(object, concatenation)
+		expectedError := errors.New("could not resolve substitution: " + substitution.String() + " to a value")
+		assertError(t, err, expectedError)
+	})
+
+	t.Run("ignore the optional substitution inside an array if it's path does not exist", func(t *testing.T) {
+		concatenation := Concatenation{&Substitution{"a", true}}
+		object := Object{"a": Int(5), "b": concatenation}
+		err := resolveSubstitutions(object, concatenation)
+		assertNoError(t, err)
+	})
+
+	t.Run("return error if subConfig is not an object, array or concatenation", func(t *testing.T) {
 		subInt := Int(42)
 		object := Object{"a": Int(5), "b": subInt}
 		err := resolveSubstitutions(object, subInt)
@@ -1158,4 +1205,62 @@ func TestIsMultiLineString(t *testing.T) {
 			assertEquals(t, got, tc.expected)
 		})
 	}
+}
+
+func TestCheckAndConcatenate(t *testing.T) {
+	t.Run("return false if there isn't any value with the given key", func(t *testing.T) {
+		parser := newParser(strings.NewReader("a:aa bb"))
+		advanceScanner(t, parser, "bb")
+		got, err := parser.checkAndConcatenate(Object{"a": String("aa")}, "c")
+		assertNoError(t, err)
+		assertEquals(t, got, false)
+	})
+
+	t.Run("return false if the value with the given is not concatenable", func(t *testing.T) {
+		parser := newParser(strings.NewReader("a:1 bb"))
+		advanceScanner(t, parser, "bb")
+		got, err := parser.checkAndConcatenate(Object{"a": Int(1)}, "a")
+		assertNoError(t, err)
+		assertEquals(t, got, false)
+	})
+
+	t.Run("return false if the current token is not concatenable", func(t *testing.T) {
+		parser := newParser(strings.NewReader("a:abc 5"))
+		advanceScanner(t, parser, "5")
+		got, err := parser.checkAndConcatenate(Object{"a": String("abc")}, "5")
+		assertNoError(t, err)
+		assertEquals(t, got, false)
+	})
+
+	t.Run("return the error if any error occurs in the extractValue method", func(t *testing.T) {
+		parser := newParser(strings.NewReader("a:abc ${"))
+		advanceScanner(t, parser, "$")
+		object := Object{"a": String("abc")}
+		got, err := parser.checkAndConcatenate(object, "a")
+		assertError(t, err, invalidSubstitutionError("missing closing parenthesis", 1, 9))
+		assertEquals(t, got, false)
+	})
+
+	t.Run("concatenate the value to the previous value if the previous one is a concatenation", func(t *testing.T) {
+		parser := newParser(strings.NewReader("a:aa bb cc"))
+		advanceScanner(t, parser, "cc")
+		concatenation := Concatenation{String("aa"), String("bb")}
+		object := Object{"a": concatenation}
+		got, err := parser.checkAndConcatenate(object, "a")
+		assertNoError(t, err)
+		assertEquals(t, got, true)
+		expected := Object{"a": append(concatenation, String("cc"))}
+		assertDeepEqual(t, object, expected)
+	})
+
+	t.Run("create a concatenation with the value and the previous value if the previous one is not a concatenation", func(t *testing.T) {
+		parser := newParser(strings.NewReader("a:aa bb"))
+		advanceScanner(t, parser, "bb")
+		object := Object{"a": String("aa")}
+		got, err := parser.checkAndConcatenate(object, "a")
+		assertNoError(t, err)
+		assertEquals(t, got, true)
+		expected := Object{"a": Concatenation{String("aa"), String("bb")}}
+		assertEquals(t, object.String(), expected.String())
+	})
 }

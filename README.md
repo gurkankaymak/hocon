@@ -27,6 +27,7 @@ Configuration library for working with the Lightbend's HOCON format. HOCON is a 
     `bar.json` into the object `foo`
   - substitutions `foo : ${a.b}` sets key `foo` to the same value
     as the `b` field in the `a` object
+  - substitutions concatenate into unquoted strings, `foo : the quick ${colors.fox} jumped`
   - substitutions fall back to environment variables if they don't
     resolve in the config itself, so `${HOME}` would work as you
     expect.

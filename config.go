@@ -19,6 +19,7 @@ const (
 	BooleanType
 	NullType
 	SubstitutionType
+	ConcatenationType
 )
 
 // Config stores the root of the configuration tree and provides an API to retrieve configuration values with the path expressions
@@ -164,20 +165,23 @@ func (c *Config) Get(path string) Value {
 type Value interface {
 	Type() Type
 	String() string
+	isConcatenable() bool
 }
 
 // String represents a string value
 type String string
 
 // Type String
-func (s String) Type() Type     { return StringType }
-func (s String) String() string { return string(s) }
+func (s String) Type() Type           { return StringType }
+func (s String) String() string       { return string(s) }
+func (s String) isConcatenable() bool { return true }
 
 // Object represents an object node in the configuration tree
 type Object map[string]Value
 
 // Type Object
-func (o Object) Type() Type { return ObjectType }
+func (o Object) Type() Type           { return ObjectType }
+func (o Object) isConcatenable() bool { return false }
 
 // String method returns the string representation of the Object
 func (o Object) String() string {
@@ -218,7 +222,8 @@ func (o Object) find(path string) Value {
 type Array []Value
 
 // Type Array
-func (a Array) Type() Type { return ArrayType }
+func (a Array) Type() Type           { return ArrayType }
+func (a Array) isConcatenable() bool { return false }
 
 // String method returns the string representation of the Array
 func (a Array) String() string {
@@ -242,6 +247,7 @@ type Int int
 // Type Number
 func (i Int) Type() Type     { return NumberType }
 func (i Int) String() string { return strconv.Itoa(int(i)) }
+func (i Int) isConcatenable() bool { return false }
 
 // Float32 represents a Float32 value
 type Float32 float32
@@ -249,6 +255,7 @@ type Float32 float32
 // Type Number
 func (f Float32) Type() Type     { return NumberType }
 func (f Float32) String() string { return strconv.FormatFloat(float64(f), 'e', -1, 32) }
+func (f Float32) isConcatenable() bool { return false }
 
 // Float64 represents a Float64 value
 type Float64 float64
@@ -256,6 +263,7 @@ type Float64 float64
 // Type Number
 func (f Float64) Type() Type     { return NumberType }
 func (f Float64) String() string { return strconv.FormatFloat(float64(f), 'e', -1, 64) }
+func (f Float64) isConcatenable() bool { return false }
 
 // Boolean represents bool value
 type Boolean bool
@@ -272,8 +280,9 @@ func newBooleanFromString(value string) Boolean {
 }
 
 // Type Boolean
-func (b Boolean) Type() Type     { return BooleanType }
-func (b Boolean) String() string { return strconv.FormatBool(bool(b)) }
+func (b Boolean) Type() Type           { return BooleanType }
+func (b Boolean) String() string       { return strconv.FormatBool(bool(b)) }
+func (b Boolean) isConcatenable() bool { return true }
 
 // Substitution refers to another value in the configuration tree
 type Substitution struct {
@@ -282,7 +291,8 @@ type Substitution struct {
 }
 
 // Type Substitution
-func (s *Substitution) Type() Type { return SubstitutionType }
+func (s *Substitution) Type() Type           { return SubstitutionType }
+func (s *Substitution) isConcatenable() bool { return true }
 
 // String method returns the string representation of the Substitution
 func (s *Substitution) String() string {
@@ -302,8 +312,9 @@ type Null string
 const null Null = "null"
 
 // Type Null
-func (n Null) Type() Type     { return NullType }
-func (n Null) String() string { return string(null) }
+func (n Null) Type() Type           { return NullType }
+func (n Null) String() string       { return string(null) }
+func (n Null) isConcatenable() bool { return true }
 
 // Duration represents a duration value
 type Duration time.Duration
@@ -311,3 +322,17 @@ type Duration time.Duration
 // Type String
 func (d Duration) Type() Type     { return StringType }
 func (d Duration) String() string { return time.Duration(d).String() }
+func (d Duration) isConcatenable() bool { return false }
+
+type Concatenation Array
+
+func (c Concatenation) Type() Type           { return ConcatenationType }
+func (c Concatenation) isConcatenable() bool { return true }
+func (c Concatenation) String() string {
+	var builder strings.Builder
+	for _, value := range c {
+		builder.WriteString(value.String())
+		builder.WriteString(" ")
+	}
+	return strings.TrimSuffix(builder.String(), " ")
+}
