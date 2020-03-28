@@ -26,6 +26,29 @@ func TestGetObject(t *testing.T) {
 	})
 }
 
+func TestGetStringMap(t *testing.T) {
+	object := Object{"b": Int(1)}
+	config := &Config{Object{"a": object}}
+	got := config.GetObject("a")
+	assertDeepEqual(t, got, object)
+}
+
+func TestGetStringMapString(t *testing.T) {
+	config := &Config{Object{"a": Object{"b": String("c"), "e": Int(1)}, "d": Array{}}}
+
+	t.Run("get object as map[string]string", func(t *testing.T) {
+		got := config.GetStringMapString("a")
+		assertDeepEqual(t, got, map[string]string{"b": "c", "e": "1"})
+	})
+
+	t.Run("...", func(t *testing.T) {
+		got := config.GetStringMapString("f")
+		if got != nil {
+			t.Errorf("expected: nil, got: %v", got)
+		}
+	})
+}
+
 func TestGetArray(t *testing.T) {
 	config := &Config{Object{"a": Array{Int(1), Int(2)}, "b": Object{"c": String("d")}}}
 
@@ -43,6 +66,47 @@ func TestGetArray(t *testing.T) {
 
 	t.Run("panic if non-array type is requested as Array", func(t *testing.T) {
 		assertPanic(t, func() { config.GetArray("b") })
+	})
+}
+
+func TestGetIntSlice(t *testing.T) {
+	config := &Config{Object{"a": Array{Int(1), Int(2)}, "b": Array{String("c"), Int(1)}}}
+
+	t.Run("get array as int slice", func(t *testing.T) {
+		got := config.GetIntSlice("a")
+		assertDeepEqual(t, got, []int{1, 2})
+	})
+
+	t.Run("return nil for a non-existing int slice", func(t *testing.T) {
+		got := config.GetIntSlice("e")
+		if got != nil {
+			t.Errorf("expected: nil, got: %v", got)
+		}
+	})
+
+	t.Run("panic if there is a non-int element in the requested array", func(t *testing.T) {
+		assertPanic(t, func() { config.GetIntSlice("b") })
+	})
+}
+
+func TestGetStringSlice(t *testing.T) {
+	config := &Config{Object{"a": Array{String("a"), String("b")}, "b": Array{Int(1), String("c")}}}
+
+	t.Run("get array as string slice", func(t *testing.T) {
+		got := config.GetStringSlice("a")
+		assertDeepEqual(t, got, []string{"a", "b"})
+	})
+
+	t.Run("return nil for a non-existing string slice", func(t *testing.T) {
+		got := config.GetStringSlice("e")
+		if got != nil {
+			t.Errorf("expected: nil, got: %v", got)
+		}
+	})
+
+	t.Run("use string representations of non-string elements and return string slice", func(t *testing.T) {
+		got := config.GetStringSlice("b")
+		assertDeepEqual(t, got, []string{"1", "c"})
 	})
 }
 
@@ -327,4 +391,10 @@ func TestSubstitution_String(t *testing.T) {
 		got := substitution.String()
 		assertEquals(t, got, "${?a}")
 	})
+}
+
+func TestToConfig(t *testing.T) {
+	object := Object{"a": Int(1)}
+	got := object.toConfig()
+	assertDeepEqual(t, got.root, object)
 }

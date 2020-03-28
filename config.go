@@ -39,6 +39,25 @@ func (c *Config) GetObject(path string) Object {
 	return value.(Object)
 }
 
+// GetStringMap method finds the value at the given path and returns it as a map[string]Value, returns nil if the value is not found
+func (c *Config) GetStringMap(path string) map[string]Value {
+	return c.GetObject(path)
+}
+
+// GetStringMapString method finds the value at the given path and returns it as a map[string]string, returns nil if the value is not found
+func (c *Config) GetStringMapString(path string) map[string]string {
+	value := c.Get(path)
+	if value == nil {
+		return nil
+	}
+	object := value.(Object)
+	var m = make(map[string]string, len(object))
+	for k, v := range object {
+		m[k] = v.String()
+	}
+	return m
+}
+
 // GetArray method finds the value at the given path and returns it as an Array, returns nil if the value is not found
 func (c *Config) GetArray(path string) Array {
 	value := c.Get(path)
@@ -46,6 +65,32 @@ func (c *Config) GetArray(path string) Array {
 		return nil
 	}
 	return value.(Array)
+}
+
+// GetIntSlice method finds the value at the given path and returns it as []int, returns nil if the value is not found
+func (c *Config) GetIntSlice(path string) []int {
+	value := c.Get(path)
+	if value == nil {
+		return nil
+	}
+	var slice []int
+	for _, v := range value.(Array) {
+		slice = append(slice, int(v.(Int)))
+	}
+	return slice
+}
+
+// GetStringSlice method finds the value at the given path and returns it as []string, returns nil if the value is not found
+func (c *Config) GetStringSlice(path string) []string {
+	value := c.Get(path)
+	if value == nil {
+		return nil
+	}
+	var slice []string
+	for _, v := range value.(Array) {
+		slice = append(slice, v.String())
+	}
+	return slice
 }
 
 // GetString method finds the value at the given path and returns it as a String, returns empty string if the value is not found
@@ -200,6 +245,11 @@ func (o Object) String() string {
 	}
 	builder.WriteString(objectEndToken)
 	return builder.String()
+}
+
+// toConfig method converts object to *Config
+func (o Object) toConfig() *Config {
+	return &Config{o}
 }
 
 func (o Object) find(path string) Value {
