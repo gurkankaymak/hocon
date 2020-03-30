@@ -32,7 +32,7 @@ var forbiddenCharacters = map[string]bool{
 }
 
 type parser struct {
-	scanner *scanner.Scanner
+	scanner     *scanner.Scanner
 	currentRune rune
 }
 

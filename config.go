@@ -295,24 +295,24 @@ func (a Array) String() string {
 type Int int
 
 // Type Number
-func (i Int) Type() Type     { return NumberType }
-func (i Int) String() string { return strconv.Itoa(int(i)) }
+func (i Int) Type() Type           { return NumberType }
+func (i Int) String() string       { return strconv.Itoa(int(i)) }
 func (i Int) isConcatenable() bool { return false }
 
 // Float32 represents a Float32 value
 type Float32 float32
 
 // Type Number
-func (f Float32) Type() Type     { return NumberType }
-func (f Float32) String() string { return strconv.FormatFloat(float64(f), 'e', -1, 32) }
+func (f Float32) Type() Type           { return NumberType }
+func (f Float32) String() string       { return strconv.FormatFloat(float64(f), 'e', -1, 32) }
 func (f Float32) isConcatenable() bool { return false }
 
 // Float64 represents a Float64 value
 type Float64 float64
 
 // Type Number
-func (f Float64) Type() Type     { return NumberType }
-func (f Float64) String() string { return strconv.FormatFloat(float64(f), 'e', -1, 64) }
+func (f Float64) Type() Type           { return NumberType }
+func (f Float64) String() string       { return strconv.FormatFloat(float64(f), 'e', -1, 64) }
 func (f Float64) isConcatenable() bool { return false }
 
 // Boolean represents bool value
@@ -370,8 +370,8 @@ func (n Null) isConcatenable() bool { return true }
 type Duration time.Duration
 
 // Type String
-func (d Duration) Type() Type     { return StringType }
-func (d Duration) String() string { return time.Duration(d).String() }
+func (d Duration) Type() Type           { return StringType }
+func (d Duration) String() string       { return time.Duration(d).String() }
 func (d Duration) isConcatenable() bool { return false }
 
 type Concatenation Array

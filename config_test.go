@@ -258,7 +258,7 @@ func TestGetDuration(t *testing.T) {
 
 	t.Run("get Duration at the given path", func(t *testing.T) {
 		got := config.GetDuration("a")
-		assertEquals(t, got.String(), Duration(5 * time.Second).String())
+		assertEquals(t, got.String(), Duration(5*time.Second).String())
 	})
 
 	t.Run("return zero for non-existing duration", func(t *testing.T) {
