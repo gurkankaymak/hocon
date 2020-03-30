@@ -102,7 +102,7 @@ func resolveSubstitutions(root Object, valueOptional ...Value) error {
 				return err
 			}
 		}
-	case Concatenation:
+	case concatenation:
 		for i, value := range v {
 			err := processSubstitution(root, value, func(foundValue Value) { v[i] = foundValue })
 			if err != nil {
@@ -367,9 +367,9 @@ func (p *parser) checkAndConcatenate(object Object, key string) (bool, error) {
 			return false, err
 		}
 		if lastValue.Type() == ConcatenationType {
-			object[key] = append(lastValue.(Concatenation), value)
+			object[key] = append(lastValue.(concatenation), value)
 		} else {
-			object[key] = Concatenation{lastValue, value}
+			object[key] = concatenation{lastValue, value}
 		}
 		return true, nil
 	}

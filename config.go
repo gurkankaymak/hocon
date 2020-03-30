@@ -189,6 +189,7 @@ func (c *Config) GetBoolean(path string) bool {
 	}
 }
 
+// GetDuration method finds the value at the given path and returns it as a time.Duration, returns 0 if the value is not found
 func (c *Config) GetDuration(path string) time.Duration {
 	value := c.Get(path)
 	if value == nil {
@@ -374,11 +375,11 @@ func (d Duration) Type() Type           { return StringType }
 func (d Duration) String() string       { return time.Duration(d).String() }
 func (d Duration) isConcatenable() bool { return false }
 
-type Concatenation Array
+type concatenation Array
 
-func (c Concatenation) Type() Type           { return ConcatenationType }
-func (c Concatenation) isConcatenable() bool { return true }
-func (c Concatenation) String() string {
+func (c concatenation) Type() Type           { return ConcatenationType }
+func (c concatenation) isConcatenable() bool { return true }
+func (c concatenation) String() string {
 	var builder strings.Builder
 	for _, value := range c {
 		builder.WriteString(value.String())

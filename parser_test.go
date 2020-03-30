@@ -373,7 +373,7 @@ func TestExtractObject(t *testing.T) {
 		parser.advance()
 		got, err := parser.extractObject()
 		assertNoError(t, err)
-		assertDeepEqual(t, got, Object{"a": Concatenation{String("bb"), String("cc"), String("dd")}})
+		assertDeepEqual(t, got, Object{"a": concatenation{String("bb"), String("cc"), String("dd")}})
 	})
 
 	t.Run("return missingCommaError if there is no comma or ASCII newline between the object elements", func(t *testing.T) {
@@ -502,7 +502,7 @@ func TestResolveSubstitutions(t *testing.T) {
 	})
 
 	t.Run("resolve valid substitution inside a concatenation", func(t *testing.T) {
-		concatenation := Concatenation{&Substitution{"a", false}}
+		concatenation := concatenation{&Substitution{"a", false}}
 		object := Object{"a": Int(5), "b": concatenation}
 		err := resolveSubstitutions(object, concatenation)
 		assertNoError(t, err)
@@ -510,7 +510,7 @@ func TestResolveSubstitutions(t *testing.T) {
 
 	t.Run("return error for non-existing substitution path inside an concatenation", func(t *testing.T) {
 		substitution := &Substitution{"c", false}
-		concatenation := Concatenation{substitution}
+		concatenation := concatenation{substitution}
 		object := Object{"a": Int(5), "b": concatenation}
 		err := resolveSubstitutions(object, concatenation)
 		expectedError := errors.New("could not resolve substitution: " + substitution.String() + " to a value")
@@ -518,7 +518,7 @@ func TestResolveSubstitutions(t *testing.T) {
 	})
 
 	t.Run("ignore the optional substitution inside an array if it's path does not exist", func(t *testing.T) {
-		concatenation := Concatenation{&Substitution{"a", true}}
+		concatenation := concatenation{&Substitution{"a", true}}
 		object := Object{"a": Int(5), "b": concatenation}
 		err := resolveSubstitutions(object, concatenation)
 		assertNoError(t, err)
@@ -1244,7 +1244,7 @@ func TestCheckAndConcatenate(t *testing.T) {
 	t.Run("concatenate the value to the previous value if the previous one is a concatenation", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a:aa bb cc"))
 		advanceScanner(t, parser, "cc")
-		concatenation := Concatenation{String("aa"), String("bb")}
+		concatenation := concatenation{String("aa"), String("bb")}
 		object := Object{"a": concatenation}
 		got, err := parser.checkAndConcatenate(object, "a")
 		assertNoError(t, err)
@@ -1260,7 +1260,7 @@ func TestCheckAndConcatenate(t *testing.T) {
 		got, err := parser.checkAndConcatenate(object, "a")
 		assertNoError(t, err)
 		assertEquals(t, got, true)
-		expected := Object{"a": Concatenation{String("aa"), String("bb")}}
+		expected := Object{"a": concatenation{String("aa"), String("bb")}}
 		assertEquals(t, object.String(), expected.String())
 	})
 }
