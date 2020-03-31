@@ -371,9 +371,10 @@ func TestExtractObject(t *testing.T) {
 	t.Run("concatenate multiple values if they are concatenable and in the same line", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a:bb cc dd"))
 		parser.advance()
+		expected := Object{"a": concatenation{String("bb"), String(" "), String("cc"), String(" "), String("dd")}}
 		got, err := parser.extractObject()
 		assertNoError(t, err)
-		assertDeepEqual(t, got, Object{"a": concatenation{String("bb"), String("cc"), String("dd")}})
+		assertEquals(t, got.String(), expected.String())
 	})
 
 	t.Run("return missingCommaError if there is no comma or ASCII newline between the object elements", func(t *testing.T) {
@@ -1244,12 +1245,12 @@ func TestCheckAndConcatenate(t *testing.T) {
 	t.Run("concatenate the value to the previous value if the previous one is a concatenation", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a:aa bb cc"))
 		advanceScanner(t, parser, "cc")
-		concatenation := concatenation{String("aa"), String("bb")}
-		object := Object{"a": concatenation}
+		whitespace := parser.lastConsumedWhitespaces
+		object := Object{"a": concatenation{String("aa"), String(whitespace), String("bb")}}
 		got, err := parser.checkAndConcatenate(object, "a")
 		assertNoError(t, err)
 		assertEquals(t, got, true)
-		expected := Object{"a": append(concatenation, String("cc"))}
+		expected := Object{"a": concatenation{String("aa"), String(whitespace), String("bb"), String(whitespace), String("cc")}}
 		assertDeepEqual(t, object, expected)
 	})
 
@@ -1260,7 +1261,7 @@ func TestCheckAndConcatenate(t *testing.T) {
 		got, err := parser.checkAndConcatenate(object, "a")
 		assertNoError(t, err)
 		assertEquals(t, got, true)
-		expected := Object{"a": concatenation{String("aa"), String("bb")}}
+		expected := Object{"a": concatenation{String("aa"), String(" "), String("bb")}}
 		assertEquals(t, object.String(), expected.String())
 	})
 }

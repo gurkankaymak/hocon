@@ -219,7 +219,7 @@ type String string
 
 // Type String
 func (s String) Type() Type           { return StringType }
-func (s String) String() string       { return string(s) }
+func (s String) String() string       { return strings.ReplaceAll(string(s), `"`, "") }
 func (s String) isConcatenable() bool { return true }
 
 // Object represents an object node in the configuration tree
@@ -383,7 +383,6 @@ func (c concatenation) String() string {
 	var builder strings.Builder
 	for _, value := range c {
 		builder.WriteString(value.String())
-		builder.WriteString(" ")
 	}
-	return strings.TrimSuffix(builder.String(), " ")
+	return builder.String()
 }

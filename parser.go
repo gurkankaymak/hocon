@@ -32,13 +32,15 @@ var forbiddenCharacters = map[string]bool{
 }
 
 type parser struct {
-	scanner     *scanner.Scanner
-	currentRune rune
+	scanner                 *scanner.Scanner
+	currentRune             rune
+	lastConsumedWhitespaces string // used in concatenation not to lose whitespaces between values
 }
 
 func newParser(src io.Reader) *parser {
 	s := new(scanner.Scanner)
 	s.Init(src)
+	s.Whitespace ^= 1<<'\t' | 1<<' ' // do not skip tabs and spaces
 	s.Error = func(*scanner.Scanner, string) {} // do not print errors to stderr
 	return &parser{scanner: s}
 }
@@ -84,6 +86,12 @@ func (p *parser) parse() (*Config, error) {
 
 func (p *parser) advance() {
 	p.currentRune = p.scanner.Scan()
+	var builder strings.Builder
+	for p.currentRune == '\t' || p.currentRune == ' ' {
+		builder.WriteString(scanner.TokenString(p.currentRune))
+		p.currentRune = p.scanner.Scan()
+	}
+	p.lastConsumedWhitespaces = builder.String()
 }
 
 func resolveSubstitutions(root Object, valueOptional ...Value) error {
@@ -362,14 +370,15 @@ func (p *parser) parseIncludedResource() (includeObject Object, err error) {
 
 func (p *parser) checkAndConcatenate(object Object, key string) (bool, error) {
 	if lastValue, ok := object[key]; ok && lastValue.isConcatenable() && p.isTokenConcatenable(p.scanner.TokenText(), p.scanner.Peek()) {
+		lastConsumedWhitespaces := p.lastConsumedWhitespaces
 		value, err := p.extractValue()
 		if err != nil {
 			return false, err
 		}
 		if lastValue.Type() == ConcatenationType {
-			object[key] = append(lastValue.(concatenation), value)
+			object[key] = append(lastValue.(concatenation), String(lastConsumedWhitespaces), value)
 		} else {
-			object[key] = concatenation{lastValue, value}
+			object[key] = concatenation{lastValue, String(lastConsumedWhitespaces), value}
 		}
 		return true, nil
 	}
