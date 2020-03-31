@@ -4,6 +4,7 @@
 [![codecov](https://codecov.io/gh/gurkankaymak/hocon/branch/master/graph/badge.svg)](https://codecov.io/gh/gurkankaymak/hocon)
 [![Build Status](https://travis-ci.org/gurkankaymak/hocon.svg?branch=master)](https://travis-ci.org/gurkankaymak/hocon)
 [![GoDoc](https://godoc.org/github.com/gurkankaymak/hocon?status.svg)](https://godoc.org/github.com/gurkankaymak/hocon)
+[![Mentioned in Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go)
 
 Configuration library for working with the Lightbend's HOCON format. HOCON is a human-friendly JSON superset
 
