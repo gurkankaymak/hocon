@@ -175,7 +175,7 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 			p.advance()
 		}
 
-		key := p.scanner.TokenText()
+		key := strings.Trim(p.scanner.TokenText(), `"`)
 		if forbiddenCharacters[key] {
 			return nil, invalidKeyError(key, p.scanner.Line, p.scanner.Column)
 		}
@@ -468,7 +468,7 @@ func (p *parser) extractValue() (Value, error) {
 			return p.extractMultiLineString()
 		}
 		p.advance()
-		return String(strings.ReplaceAll(token, `"`, "")), nil
+		return String(strings.Trim(token, `"`)), nil
 	case scanner.Ident:
 		switch {
 		case token == string(null):

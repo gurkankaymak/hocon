@@ -219,7 +219,7 @@ type String string
 
 // Type String
 func (s String) Type() Type           { return StringType }
-func (s String) String() string       { return strings.ReplaceAll(string(s), `"`, "") }
+func (s String) String() string       { return strings.Trim(string(s), `"`) }
 func (s String) isConcatenable() bool { return true }
 
 // Object represents an object node in the configuration tree
