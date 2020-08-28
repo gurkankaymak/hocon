@@ -427,7 +427,7 @@ func TestSubstitution_String(t *testing.T) {
 
 func TestToConfig(t *testing.T) {
 	object := Object{"a": Int(1)}
-	got := object.toConfig()
+	got := object.ToConfig()
 	assertDeepEqual(t, got.root, object)
 }
 
