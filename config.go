@@ -22,7 +22,8 @@ const (
 	ConcatenationType
 )
 
-// Config stores the root of the configuration tree and provides an API to retrieve configuration values with the path expressions
+// Config stores the root of the configuration tree
+// and provides an API to retrieve configuration values with the path expressions
 type Config struct {
 	root Value
 }
@@ -36,25 +37,31 @@ func (c *Config) GetObject(path string) Object {
 	if value == nil {
 		return nil
 	}
+
 	return value.(Object)
 }
 
-// GetStringMap method finds the value at the given path and returns it as a map[string]Value, returns nil if the value is not found
+// GetStringMap method finds the value at the given path and returns it as a map[string]Value
+// returns nil if the value is not found
 func (c *Config) GetStringMap(path string) map[string]Value {
 	return c.GetObject(path)
 }
 
-// GetStringMapString method finds the value at the given path and returns it as a map[string]string, returns nil if the value is not found
+// GetStringMapString method finds the value at the given path and returns it as a map[string]string
+// returns nil if the value is not found
 func (c *Config) GetStringMapString(path string) map[string]string {
 	value := c.Get(path)
 	if value == nil {
 		return nil
 	}
+
 	object := value.(Object)
+
 	var m = make(map[string]string, len(object))
 	for k, v := range object {
 		m[k] = v.String()
 	}
+
 	return m
 }
 
@@ -64,6 +71,7 @@ func (c *Config) GetArray(path string) Array {
 	if value == nil {
 		return nil
 	}
+
 	return value.(Array)
 }
 
@@ -73,32 +81,43 @@ func (c *Config) GetIntSlice(path string) []int {
 	if value == nil {
 		return nil
 	}
-	var slice []int
-	for _, v := range value.(Array) {
+
+	arr := value.(Array)
+	slice := make([]int, 0, len(arr))
+
+	for _, v := range arr {
 		slice = append(slice, int(v.(Int)))
 	}
+
 	return slice
 }
 
-// GetStringSlice method finds the value at the given path and returns it as []string, returns nil if the value is not found
+// GetStringSlice method finds the value at the given path and returns it as []string
+// returns nil if the value is not found
 func (c *Config) GetStringSlice(path string) []string {
 	value := c.Get(path)
 	if value == nil {
 		return nil
 	}
-	var slice []string
-	for _, v := range value.(Array) {
+
+	arr := value.(Array)
+	slice := make([]string, 0, len(arr))
+
+	for _, v := range arr {
 		slice = append(slice, v.String())
 	}
+
 	return slice
 }
 
-// GetString method finds the value at the given path and returns it as a String, returns empty string if the value is not found
+// GetString method finds the value at the given path and returns it as a String
+// returns empty string if the value is not found
 func (c *Config) GetString(path string) string {
 	value := c.Get(path)
 	if value == nil {
 		return ""
 	}
+
 	return value.String()
 }
 
@@ -108,6 +127,7 @@ func (c *Config) GetInt(path string) int {
 	if value == nil {
 		return 0
 	}
+
 	switch val := value.(type) {
 	case Int:
 		return int(val)
@@ -116,18 +136,21 @@ func (c *Config) GetInt(path string) int {
 		if err != nil {
 			panic(err)
 		}
+
 		return intValue
 	default:
 		panic("cannot parse value: " + val.String() + " to int!")
 	}
 }
 
-// GetFloat32 method finds the value at the given path and returns it as a Float32, returns float32(0.0) if the value is not found
+// GetFloat32 method finds the value at the given path and returns it as a Float32
+// returns float32(0.0) if the value is not found
 func (c *Config) GetFloat32(path string) float32 {
 	value := c.Get(path)
 	if value == nil {
 		return float32(0.0)
 	}
+
 	switch val := value.(type) {
 	case Float32:
 		return float32(val)
@@ -138,18 +161,21 @@ func (c *Config) GetFloat32(path string) float32 {
 		if err != nil {
 			panic(err)
 		}
+
 		return float32(floatValue)
 	default:
 		panic("cannot parse value: " + val.String() + " to float32!")
 	}
 }
 
-// GetFloat64 method finds the value at the given path and returns it as a Float64, returns 0.0 if the value is not found
+// GetFloat64 method finds the value at the given path and returns it as a Float64
+// returns 0.0 if the value is not found
 func (c *Config) GetFloat64(path string) float64 {
 	value := c.Get(path)
 	if value == nil {
 		return 0.0
 	}
+
 	switch val := value.(type) {
 	case Float64:
 		return float64(val)
@@ -160,18 +186,21 @@ func (c *Config) GetFloat64(path string) float64 {
 		if err != nil {
 			panic(err)
 		}
+
 		return floatValue
 	default:
 		panic("cannot parse value: " + val.String() + "to float64!")
 	}
 }
 
-// GetBoolean method finds the value at the given path and returns it as a Boolean, returns false if the value is not found
+// GetBoolean method finds the value at the given path and returns it as a Boolean
+// returns false if the value is not found
 func (c *Config) GetBoolean(path string) bool {
 	value := c.Get(path)
 	if value == nil {
 		return false
 	}
+
 	switch val := value.(type) {
 	case Boolean:
 		return bool(val)
@@ -189,22 +218,25 @@ func (c *Config) GetBoolean(path string) bool {
 	}
 }
 
-// GetDuration method finds the value at the given path and returns it as a time.Duration, returns 0 if the value is not found
+// GetDuration method finds the value at the given path and returns it as a time.Duration
+// returns 0 if the value is not found
 func (c *Config) GetDuration(path string) time.Duration {
 	value := c.Get(path)
 	if value == nil {
 		return 0
 	}
+
 	return time.Duration(value.(Duration))
 }
 
-// Get method finds the value at the given path and returns it without casting to any type, returns nil if the value is not found
+// Get method finds the value at the given path and returns it without casting to any type
+// returns nil if the value is not found
 func (c *Config) Get(path string) Value {
 	if c.root.Type() != ObjectType {
 		return nil
 	}
-	return c.root.(Object).find(path)
 
+	return c.root.(Object).find(path)
 }
 
 // Value interface represents a value in the configuration tree, all the value types implements this interface
@@ -232,19 +264,25 @@ func (o Object) isConcatenable() bool { return false }
 // String method returns the string representation of the Object
 func (o Object) String() string {
 	var builder strings.Builder
+
 	itemsSize := len(o)
 	i := 1
+
 	builder.WriteString(objectStartToken)
+
 	for key, value := range o {
 		builder.WriteString(key)
 		builder.WriteString(colonToken)
 		builder.WriteString(value.String())
+
 		if i < itemsSize {
 			builder.WriteString(", ")
 		}
 		i++
 	}
+
 	builder.WriteString(objectEndToken)
+
 	return builder.String()
 }
 
@@ -259,13 +297,16 @@ func (o Object) find(path string) Value {
 	lastKey := keys[size-1]
 	keysWithoutLast := keys[:size-1]
 	object := o
+
 	for _, key := range keysWithoutLast {
 		value, ok := object[key]
 		if !ok {
 			return nil
 		}
+
 		object = value.(Object)
 	}
+
 	return object[lastKey]
 }
 
@@ -281,14 +322,19 @@ func (a Array) String() string {
 	if len(a) == 0 {
 		return "[]"
 	}
+
 	var builder strings.Builder
+
 	builder.WriteString(arrayStartToken)
 	builder.WriteString(a[0].String())
+
 	for _, value := range a[1:] {
 		builder.WriteString(commaToken)
 		builder.WriteString(value.String())
 	}
+
 	builder.WriteString(arrayEndToken)
+
 	return builder.String()
 }
 
@@ -348,12 +394,16 @@ func (s *Substitution) isConcatenable() bool { return true }
 // String method returns the string representation of the Substitution
 func (s *Substitution) String() string {
 	var builder strings.Builder
+
 	builder.WriteString("${")
+
 	if s.optional {
 		builder.WriteString("?")
 	}
+
 	builder.WriteString(s.path)
 	builder.WriteString("}")
+
 	return builder.String()
 }
 
@@ -381,8 +431,10 @@ func (c concatenation) Type() Type           { return ConcatenationType }
 func (c concatenation) isConcatenable() bool { return true }
 func (c concatenation) String() string {
 	var builder strings.Builder
+
 	for _, value := range c {
 		builder.WriteString(value.String())
 	}
+
 	return builder.String()
 }

@@ -41,7 +41,7 @@ func TestGetStringMapString(t *testing.T) {
 		assertDeepEqual(t, got, map[string]string{"b": "c", "e": "1"})
 	})
 
-	t.Run("...", func(t *testing.T) {
+	t.Run("return nil for a non-existing string map", func(t *testing.T) {
 		got := config.GetStringMapString("f")
 		if got != nil {
 			t.Errorf("expected: nil, got: %v", got)
