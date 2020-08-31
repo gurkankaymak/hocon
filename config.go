@@ -239,6 +239,21 @@ func (c *Config) Get(path string) Value {
 	return c.root.(Object).find(path)
 }
 
+// WithFallback method returns a new *Config (or the current config, if the given fallback doesn't get used)
+// 1. merges the values of the current and fallback *Configs, if the root of both of them are of type Object
+// for the same keys current values overrides the fallback values
+// 2. if any of the *Configs has non-object root then returns the current *Config ignoring the fallback parameter
+func (c *Config) WithFallback(fallback *Config) *Config {
+	if current, ok := c.root.(Object); ok {
+		if fallbackObject, ok := fallback.root.(Object); ok {
+			mergeObjects(fallbackObject, current)
+			return fallbackObject.toConfig()
+		}
+	}
+
+	return c
+}
+
 // Value interface represents a value in the configuration tree, all the value types implements this interface
 type Value interface {
 	Type() Type

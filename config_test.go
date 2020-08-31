@@ -271,6 +271,28 @@ func TestGetDuration(t *testing.T) {
 	})
 }
 
+func TestWithFallback(t *testing.T) {
+	config1 := &Config{Object{"a": String("aa"), "b": String("bb")}}
+	config2 := &Config{Object{"a": String("aaa"), "c": String("cc")}}
+	config3 := &Config{Array{Int(1), Int(2)}}
+
+	t.Run("merge the given fallback config with the current config if the root of both of them are of type Object (for the same keys current config should override the fallback)", func(t *testing.T) {
+		expected := &Config{Object{"a": String("aa"), "b": String("bb"), "c": String("cc")}}
+		got := config1.WithFallback(config2)
+		assertDeepEqual(t, got, expected)
+	})
+
+	t.Run("return the current config if the root of the given fallback config is not an Object", func(t *testing.T) {
+		got := config1.WithFallback(config3)
+		assertDeepEqual(t, got, config1)
+	})
+
+	t.Run("return the current config if the root of it is not an Object", func(t *testing.T) {
+		got := config3.WithFallback(config1)
+		assertDeepEqual(t, got, config3)
+	})
+}
+
 func TestFind(t *testing.T) {
 	t.Run("return nil if path does not contain any dot and there is no value with the given path", func(t *testing.T) {
 		object := Object{"a": Int(1)}
