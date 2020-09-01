@@ -246,8 +246,10 @@ func (c *Config) Get(path string) Value {
 func (c *Config) WithFallback(fallback *Config) *Config {
 	if current, ok := c.root.(Object); ok {
 		if fallbackObject, ok := fallback.root.(Object); ok {
-			mergeObjects(fallbackObject, current)
-			return fallbackObject.toConfig()
+			resultConfig := fallbackObject.copy()
+			mergeObjects(resultConfig, current)
+
+			return resultConfig.toConfig()
 		}
 	}
 
@@ -323,6 +325,21 @@ func (o Object) find(path string) Value {
 	}
 
 	return object[lastKey]
+}
+
+func (o Object) copy() Object {
+	result := Object{}
+
+	for k, v := range o {
+		subObject, ok := v.(Object)
+		if ok {
+			result[k] = subObject
+		} else {
+			result[k] = v
+		}
+	}
+
+	return result
 }
 
 // Array represents an array node in the configuration tree
