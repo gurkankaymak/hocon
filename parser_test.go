@@ -121,6 +121,20 @@ func TestParse(t *testing.T) {
 		assertNoError(t, err)
 		assertDeepEqual(t, got, &Config{Object{"a": Object{"b": String("c")}}})
 	})
+
+	t.Run("parse the path key that contains a hyphen", func(t *testing.T) {
+		parser := newParser(strings.NewReader(`a.b-1: "c"`))
+		got, err := parser.parse()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": Object{"b-1": String("c")}}})
+	})
+
+	t.Run("parse the nested object with a key containing a hyphen", func(t *testing.T) {
+		parser := newParser(strings.NewReader(`{a: {b-1: "c"}}`))
+		got, err := parser.parse()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": Object{"b-1": String("c")}}})
+	})
 }
 
 func TestExtractObject(t *testing.T) {
