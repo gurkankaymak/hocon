@@ -6,6 +6,16 @@ import (
 	"time"
 )
 
+func TestGetRoot(t *testing.T) {
+	root := Object{"a": Object{"b": String("c")}, "d": Array{}}
+	config := &Config{root}
+
+	t.Run("get root value", func(t *testing.T) {
+		got := config.GetRoot()
+		assertDeepEqual(t, got, root)
+	})
+}
+
 func TestGetObject(t *testing.T) {
 	config := &Config{Object{"a": Object{"b": String("c")}, "d": Array{}}}
 
