@@ -338,7 +338,7 @@ func (o Object) copy() Object {
 	for k, v := range o {
 		subObject, ok := v.(Object)
 		if ok {
-			result[k] = subObject
+			result[k] = subObject.copy()
 		} else {
 			result[k] = v
 		}
@@ -457,7 +457,7 @@ func (n Null) isConcatenable() bool { return true }
 // Duration represents a duration value
 type Duration time.Duration
 
-// Type String
+// Type Duration
 func (d Duration) Type() Type           { return StringType }
 func (d Duration) String() string       { return time.Duration(d).String() }
 func (d Duration) isConcatenable() bool { return false }
@@ -466,6 +466,15 @@ type concatenation Array
 
 func (c concatenation) Type() Type           { return ConcatenationType }
 func (c concatenation) isConcatenable() bool { return true }
+func (c concatenation) containsObject() bool {
+	for _, value := range c {
+		if value.Type() == ObjectType {
+			return true
+		}
+	}
+
+	return false
+}
 func (c concatenation) String() string {
 	var builder strings.Builder
 

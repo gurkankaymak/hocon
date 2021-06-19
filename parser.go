@@ -138,6 +138,21 @@ func resolveSubstitutions(root Object, valueOptional ...Value) error {
 			if err != nil {
 				return err
 			}
+
+			if concatenationValue, ok := value.(concatenation); ok && concatenationValue.containsObject() {
+				merged := Object{}
+
+				for _, value := range concatenationValue {
+					object, ok := value.(Object)
+					if !ok {
+						return invalidConcatenationError()
+					}
+
+					mergeObjects(merged, object)
+				}
+
+				root[key] = merged
+			}
 		}
 	default:
 		return invalidValueError("substitutions are only allowed in field values and array elements", 0, 0)
@@ -245,10 +260,14 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 				return nil, err
 			}
 
-			if value.Type() == ObjectType {
-				if existingValue, ok := object[key]; ok && existingValue.Type() == ObjectType {
+			if existingValue, ok := object[key]; ok {
+				if existingValue.Type() == ObjectType && value.Type() == ObjectType {
 					mergeObjects(existingValue.(Object), value.(Object))
 					value = existingValue
+				} else if (existingValue.Type() == SubstitutionType && value.Type() == SubstitutionType) ||
+					(existingValue.Type() == ObjectType && value.Type() == SubstitutionType) ||
+					(existingValue.Type() == SubstitutionType && value.Type() == ObjectType) {
+					value = concatenation{existingValue, value}
 				}
 			}
 

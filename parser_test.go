@@ -313,6 +313,43 @@ func TestExtractObject(t *testing.T) {
 		assertDeepEqual(t, got, expected)
 	})
 
+	t.Run("return object containing a concatenation if the current value (after colon separator) is substitution and there is an existing substitution with the same key", func(t *testing.T) {
+		parser := newParser(strings.NewReader("{a:1,b:2,c:${a},c:${b}}"))
+		parser.advance()
+		expected := Object{
+			"a": Int(1),
+			"b": Int(2),
+			"c": concatenation{&Substitution{path: "a", optional: false}, &Substitution{path: "b", optional: false}},
+		}
+		got, err := parser.extractObject()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, expected)
+	})
+
+	t.Run("return object containing a concatenation if the current value (after colon separator) is substitution and there is an existing object with the same key", func(t *testing.T) {
+		parser := newParser(strings.NewReader("{b:2,c:{a:1},c:${b}}"))
+		parser.advance()
+		expected := Object{
+			"b": Int(2),
+			"c": concatenation{Object{"a": Int(1)}, &Substitution{path: "b", optional: false}},
+		}
+		got, err := parser.extractObject()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, expected)
+	})
+
+	t.Run("return object containing a concatenation if the current value (after colon separator) is substitution and there is an existing object with the same key", func(t *testing.T) {
+		parser := newParser(strings.NewReader("{a:1,c:${a},c:{b:2}}"))
+		parser.advance()
+		expected := Object{
+			"a": Int(1),
+			"c": concatenation{&Substitution{path: "a", optional: false}, Object{"b": Int(2)}},
+		}
+		got, err := parser.extractObject()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, expected)
+	})
+
 	t.Run("override the existing value if the current value (after colon separator) is object and there is an existing non-object with the same key", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a:1,a:{c:2}}"))
 		parser.advance()
@@ -493,6 +530,24 @@ func TestResolveSubstitutions(t *testing.T) {
 		assertNoError(t, err)
 	})
 
+	t.Run("return invalid concatenation error if the concatenation contains an object and a different type", func(t *testing.T) {
+		substitution := &Substitution{"a", false}
+		object := Object{"a": Int(5), "b": concatenation{Object{"aa": Int(1)}, substitution}}
+		err := resolveSubstitutions(object)
+		assertError(t, err, invalidConcatenationError())
+	})
+
+	t.Run("resolve the substitution in concatenation and merge the objects if the concatenation's every element is object", func(t *testing.T) {
+		substitution := &Substitution{"a", false}
+		object := Object{"bb": Int(1)}
+		root := Object{"a": Object{"aa": Int(5)}, "b": concatenation{object, substitution}}
+		expected := Object{"aa": Int(5), "bb": Int(1)}
+		err := resolveSubstitutions(root)
+		got := root.find("b")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, expected)
+	})
+
 	t.Run("resolve valid substitution inside an array", func(t *testing.T) {
 		subArray := Array{&Substitution{"a", false}}
 		object := Object{"a": Int(5), "b": subArray}
@@ -532,7 +587,7 @@ func TestResolveSubstitutions(t *testing.T) {
 		assertError(t, err, expectedError)
 	})
 
-	t.Run("ignore the optional substitution inside an array if it's path does not exist", func(t *testing.T) {
+	t.Run("ignore the optional substitution inside an concatenation if it's path does not exist", func(t *testing.T) {
 		concatenation := concatenation{&Substitution{"a", true}}
 		object := Object{"a": Int(5), "b": concatenation}
 		err := resolveSubstitutions(object, concatenation)

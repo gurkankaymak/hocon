@@ -65,3 +65,7 @@ func adjacentCommasError(line, column int) *ParseError {
 func leadingCommaError(line, column int) *ParseError {
 	return parseError("leading comma", "leading comma in arrays and objects are invalid!", line, column)
 }
+
+func invalidConcatenationError() *ParseError {
+	return parseError("invalid concatenation!", "objects cannot be concatenated with other types", 0, 0)
+}

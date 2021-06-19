@@ -430,3 +430,17 @@ func TestToConfig(t *testing.T) {
 	got := object.toConfig()
 	assertDeepEqual(t, got.root, object)
 }
+
+func TestContainsObject(t *testing.T) {
+	t.Run("return false if the concatenation does not contain an Object", func(t *testing.T) {
+		concatenation := concatenation{String("a"), String("b")}
+		got := concatenation.containsObject()
+		assertEquals(t, got, false)
+	})
+
+	t.Run("return true if the concatenation contains an Object", func(t *testing.T) {
+		concatenation := concatenation{Object{"a": String("aa")}, String("b")}
+		got := concatenation.containsObject()
+		assertEquals(t, got, true)
+	})
+}
