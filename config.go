@@ -31,6 +31,11 @@ type Config struct {
 // String method returns the string representation of the Config object
 func (c *Config) String() string { return c.root.String() }
 
+// GetRoot method returns the root value of the configuration
+func (c *Config) GetRoot() Value {
+	return c.root
+}
+
 // GetObject method finds the value at the given path and returns it as an Object, returns nil if the value is not found
 func (c *Config) GetObject(path string) Object {
 	value := c.Get(path)
