@@ -254,7 +254,7 @@ func (c *Config) WithFallback(fallback *Config) *Config {
 			resultConfig := fallbackObject.copy()
 			mergeObjects(resultConfig, current)
 
-			return resultConfig.toConfig()
+			return resultConfig.ToConfig()
 		}
 	}
 
@@ -308,8 +308,8 @@ func (o Object) String() string {
 	return builder.String()
 }
 
-// toConfig method converts object to *Config
-func (o Object) toConfig() *Config {
+// ToConfig method converts object to *Config
+func (o Object) ToConfig() *Config {
 	return &Config{o}
 }
 
