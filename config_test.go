@@ -36,6 +36,13 @@ func TestGetObject(t *testing.T) {
 	})
 }
 
+func TestGetConfig(t *testing.T) {
+	nestedConfig := &Config{Object{"b": String("c"), "d": Array{}}}
+	config := &Config{Object{"a": nestedConfig.root}}
+	got := config.GetConfig("a")
+	assertDeepEqual(t, got, nestedConfig)
+}
+
 func TestGetStringMap(t *testing.T) {
 	object := Object{"b": Int(1)}
 	config := &Config{Object{"a": object}}
