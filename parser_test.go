@@ -368,6 +368,15 @@ func TestExtractObject(t *testing.T) {
 		assertDeepEqual(t, got, expected)
 	})
 
+	t.Run("return merged object if the current value (without separator) is object and there is an existing object with the same key", func(t *testing.T) {
+		parser := newParser(strings.NewReader("{a{b:1},a{c:2}}"))
+		parser.advance()
+		expected := Object{"a": Object{"b": Int(1), "c": Int(2)}}
+		got, err := parser.extractObject()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, expected)
+	})
+
 	t.Run("return the error if any error occurs in parsePlusEquals method", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a:1,a+=2}"))
 		parser.advance()
