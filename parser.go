@@ -247,6 +247,13 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 				return nil, err
 			}
 
+			if existingValue, ok := object[key]; ok {
+				if existingValue.Type() == ObjectType {
+					mergeObjects(existingValue.(Object), extractedObject)
+					extractedObject = existingValue.(Object)
+				}
+			}
+
 			object[key] = extractedObject
 		}
 

@@ -368,6 +368,42 @@ func TestExtractObject(t *testing.T) {
 		assertDeepEqual(t, got, expected)
 	})
 
+	t.Run("return merged object if the current value (without separator) is object and there is an existing object with the same key", func(t *testing.T) {
+		parser := newParser(strings.NewReader("{a{b:1},a{c:2}}"))
+		parser.advance()
+		expected := Object{"a": Object{"b": Int(1), "c": Int(2)}}
+		got, err := parser.extractObject()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, expected)
+	})
+
+	t.Run("return overwritten object if a key is repeated three times, and the first occurrence is not an object", func(t *testing.T) {
+		parser := newParser(strings.NewReader("{a=1,a{b:1},a{c:2}}"))
+		parser.advance()
+		expected := Object{"a": Object{"b": Int(1), "c": Int(2)}}
+		got, err := parser.extractObject()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, expected)
+	})
+
+	t.Run("return overwritten object if a key is repeated three times, and the second occurrence is not an object", func(t *testing.T) {
+		parser := newParser(strings.NewReader("{a{b:1},a=1,a{c:2}}"))
+		parser.advance()
+		expected := Object{"a": Object{"c": Int(2)}}
+		got, err := parser.extractObject()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, expected)
+	})
+
+	t.Run("return overwritten object if a key is repeated three times, and the last occurrence is not an object", func(t *testing.T) {
+		parser := newParser(strings.NewReader("{a{b:1},a{c:2},a=1}"))
+		parser.advance()
+		expected := Object{"a": Int(1)}
+		got, err := parser.extractObject()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, expected)
+	})
+
 	t.Run("return the error if any error occurs in parsePlusEquals method", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a:1,a+=2}"))
 		parser.advance()
