@@ -46,6 +46,16 @@ func (c *Config) GetObject(path string) Object {
 	return value.(Object)
 }
 
+// GetConfig method finds the value at the given path and returns it as a Config, returns nil if the value is not found
+func (c *Config) GetConfig(path string) *Config {
+	value := c.GetObject(path)
+	if value == nil {
+		return nil
+	}
+
+	return value.ToConfig()
+}
+
 // GetStringMap method finds the value at the given path and returns it as a map[string]Value
 // returns nil if the value is not found
 func (c *Config) GetStringMap(path string) map[string]Value {

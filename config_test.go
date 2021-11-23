@@ -36,6 +36,23 @@ func TestGetObject(t *testing.T) {
 	})
 }
 
+func TestGetConfig(t *testing.T) {
+	nestedConfig := &Config{Object{"b": String("c"), "d": Array{}}}
+	config := &Config{Object{"a": nestedConfig.root}}
+
+	t.Run("get nested config", func(t *testing.T) {
+		got := config.GetConfig("a")
+		assertDeepEqual(t, got, nestedConfig)
+	})
+
+	t.Run("return nil for non existing config", func(t *testing.T) {
+		got := config.GetConfig("b")
+		if got != nil {
+			t.Errorf("expected: nil, got: %v", got)
+		}
+	})
+}
+
 func TestGetStringMap(t *testing.T) {
 	object := Object{"b": Int(1)}
 	config := &Config{Object{"a": object}}
