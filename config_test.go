@@ -442,6 +442,15 @@ func TestSubstitution_String(t *testing.T) {
 	})
 }
 
+func TestStringWithAlternative_String(t *testing.T) {
+	t.Run("return the string of string with alternative", func(t *testing.T) {
+		substitution := Substitution{path: "a", optional: false}
+		withAlt := stringWithAlternative{value: "value", alternative: &substitution}
+		got := withAlt.String()
+		assertEquals(t, got, "(value | ${a})")
+	})
+}
+
 func TestToConfig(t *testing.T) {
 	object := Object{"a": Int(1)}
 	got := object.ToConfig()
