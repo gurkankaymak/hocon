@@ -20,6 +20,7 @@ const (
 	NullType
 	SubstitutionType
 	ConcatenationType
+	stringWithAlternativeType
 )
 
 // Config stores the root of the configuration tree
@@ -285,6 +286,20 @@ type String string
 func (s String) Type() Type           { return StringType }
 func (s String) String() string       { return strings.Trim(string(s), `"`) }
 func (s String) isConcatenable() bool { return true }
+
+// stringWithAlternative represents a string value with Substitution which might override the original string value
+type stringWithAlternative struct {
+	value       String
+	alternative *Substitution
+}
+
+func (s *stringWithAlternative) Type() Type { return stringWithAlternativeType }
+
+func (s *stringWithAlternative) String() string {
+	return fmt.Sprintf("(%s | %s)", s.value, s.alternative.String())
+}
+
+func (s *stringWithAlternative) isConcatenable() bool { return false }
 
 // Object represents an object node in the configuration tree
 type Object map[string]Value
