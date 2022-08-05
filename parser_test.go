@@ -173,6 +173,7 @@ func TestExtractObject(t *testing.T) {
 	t.Run("skip the comments inside objects", func(t *testing.T) {
 		config := `{
 			# this is a comment
+			# this is also a comment
 			a: 1
 		}
 		`
@@ -199,6 +200,19 @@ func TestExtractObject(t *testing.T) {
 		got, err := parser.extractObject()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, expected)
+	})
+
+	t.Run("parse correctly if the last line is a comment", func(t *testing.T) {
+		config := `{
+			a: 1
+			# this is a comment
+		}
+		`
+		parser := newParser(strings.NewReader(config))
+		parser.advance()
+		got, err := parser.extractObject()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, Object{"a": Int(1)})
 	})
 
 	for forbiddenChar := range forbiddenCharacters {

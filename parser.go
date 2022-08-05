@@ -199,7 +199,7 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 	lastRow := 0
 
 	for tok := p.scanner.Peek(); tok != scanner.EOF; tok = p.scanner.Peek() {
-		if p.scanner.TokenText() == commentToken {
+		for p.scanner.TokenText() == commentToken {
 			p.consumeComment()
 		}
 
@@ -213,6 +213,14 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 
 			mergeObjects(object, includedObject)
 			p.advance()
+		}
+
+		if !parenthesisBalanced && p.scanner.TokenText() == objectEndToken {
+			parenthesisBalanced = true
+
+			p.advance()
+
+			break
 		}
 
 		key := strings.Trim(p.scanner.TokenText(), `"`)
