@@ -163,19 +163,42 @@ func resolveSubstitutions(root Object, valueOptional ...Value) error {
 
 func processSubstitution(root Object, value Value, resolveFunc func(value Value)) error {
 	if valueType := value.Type(); valueType == SubstitutionType {
-		substitution := value.(*Substitution)
-		if foundValue := root.find(substitution.path); foundValue != nil {
-			resolveFunc(foundValue)
-		} else if env, ok := os.LookupEnv(substitution.path); ok {
-			resolveFunc(String(env))
-		} else if !substitution.optional {
-			return errors.New("could not resolve substitution: " + substitution.String() + " to a value")
+		processed, err := processSubstitutionType(root, value.(*Substitution))
+		if err != nil {
+			return err
 		}
+		resolveFunc(processed)
+		return nil
+	} else if valueType == stringWithAlternativeType {
+		withAlternative := value.(*stringWithAlternative)
+		if withAlternative.alternative != nil {
+			processed, err := processSubstitutionType(root, withAlternative.alternative)
+			if err != nil {
+				return err
+			}
+			if processed != nil {
+				resolveFunc(processed)
+				return nil
+			}
+		}
+		resolveFunc(withAlternative.value)
+		return nil
 	} else if valueType == ObjectType || valueType == ArrayType || valueType == ConcatenationType {
 		return resolveSubstitutions(root, value)
 	}
 
 	return nil
+}
+
+func processSubstitutionType(root Object, substitution *Substitution) (Value, error) {
+	if foundValue := root.find(substitution.path); foundValue != nil {
+		return foundValue, nil
+	} else if env, ok := os.LookupEnv(substitution.path); ok {
+		return String(env), nil
+	} else if !substitution.optional {
+		return nil, errors.New("could not resolve substitution: " + substitution.String() + " to a value")
+	}
+	return nil, nil
 }
 
 func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
@@ -283,6 +306,16 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 					(existingValue.Type() == ObjectType && value.Type() == SubstitutionType) ||
 					(existingValue.Type() == SubstitutionType && value.Type() == ObjectType) {
 					value = concatenation{existingValue, value}
+				} else if existingValue.Type() == StringType && value.Type() == SubstitutionType {
+					value = &stringWithAlternative{
+						value:       existingValue.(String),
+						alternative: value.(*Substitution),
+					}
+				} else if existingValue.Type() == stringWithAlternativeType && value.Type() == SubstitutionType {
+					value = &stringWithAlternative{
+						value:       existingValue.(*stringWithAlternative).value,
+						alternative: value.(*Substitution),
+					}
 				}
 			}
 
