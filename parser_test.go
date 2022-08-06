@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -365,6 +364,20 @@ func TestExtractObject(t *testing.T) {
 		assertDeepEqual(t, got, expected)
 	})
 
+	t.Run("return valueWithAlternative object if the current value (after colon separator) is substitution and the existing value is neither a substitution nor object", func(t *testing.T) {
+		parser := newParser(strings.NewReader("{a:1,a:${?b}}"))
+		parser.advance()
+		expected := Object{
+			"a": &valueWithAlternative{
+				value:       Int(1),
+				alternative: &Substitution{path: "b", optional: true},
+			},
+		}
+		got, err := parser.extractObject()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, expected)
+	})
+
 	t.Run("override the existing value if the current value (after colon separator) is object and there is an existing non-object with the same key", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a:1,a:{c:2}}"))
 		parser.advance()
@@ -564,7 +577,7 @@ func TestResolveSubstitutions(t *testing.T) {
 		testEnv := "TEST_ENV"
 		testEnvValue := "test"
 		envSubstitution := &Substitution{path: testEnv, optional: false}
-		staticWithEnv := &stringWithAlternative{value: "static", alternative: envSubstitution}
+		staticWithEnv := &valueWithAlternative{value: String("static"), alternative: envSubstitution}
 		object := Object{"a": staticWithEnv}
 		err := os.Setenv(testEnv, testEnvValue)
 		assertNoError(t, err)
@@ -582,7 +595,7 @@ func TestResolveSubstitutions(t *testing.T) {
 	t.Run("resolve to the static value if substitution path does not exist and environment variable is not set and default value was not provided", func(t *testing.T) {
 		defaultValue := String("default")
 		envSubstitution := &Substitution{path: "TEST_ENV", optional: true}
-		staticWithEnv := &stringWithAlternative{value: defaultValue, alternative: envSubstitution}
+		staticWithEnv := &valueWithAlternative{value: defaultValue, alternative: envSubstitution}
 		object := Object{"a": staticWithEnv}
 		err := resolveSubstitutions(object)
 		assertNoError(t, err)
@@ -595,7 +608,7 @@ func TestResolveSubstitutions(t *testing.T) {
 	t.Run("return an error if cannot find required substitution and default value was provided", func(t *testing.T) {
 		defaultValue := String("default")
 		envSubstitution := &Substitution{path: "TEST_ENV", optional: false}
-		staticWithEnv := &stringWithAlternative{value: defaultValue, alternative: envSubstitution}
+		staticWithEnv := &valueWithAlternative{value: defaultValue, alternative: envSubstitution}
 		object := Object{"a": staticWithEnv}
 		err := resolveSubstitutions(object)
 
@@ -696,36 +709,58 @@ func TestResolveSubstitutions(t *testing.T) {
 		assertError(t, err, expectedError)
 	})
 
-	t.Run("extract string with alternative value", func(t *testing.T) {
-		parser := newParser(strings.NewReader("a: static, a:${?b}"))
-		expected := Object{"a": &stringWithAlternative{
-			value: "static",
-			alternative: &Substitution{
-				path:     "b",
-				optional: true,
-			},
+	t.Run("extract valueWithAlternative value with string type", func(t *testing.T) {
+		parser := newParser(strings.NewReader("a: stringValue, a:${?b}"))
+		expected := Object{"a": &valueWithAlternative{
+			value:       String("stringValue"),
+			alternative: &Substitution{path: "b", optional: true},
 		}}
 		got, err := parser.extractObject()
 		assertNoError(t, err)
-		if !reflect.DeepEqual(expected, got) {
-			t.Errorf("expected: %v, got: %v", expected, got)
-		}
+		assertDeepEqual(t, got, expected)
 	})
 
-	t.Run("extract string with alternative value and overwrite alternatives", func(t *testing.T) {
-		parser := newParser(strings.NewReader("a: static, a:${?c}, a:${?b}"))
-		expected := Object{"a": &stringWithAlternative{
-			value: "static",
-			alternative: &Substitution{
-				path:     "b",
-				optional: true,
-			},
+	t.Run("extract valueWithAlternative value with number type", func(t *testing.T) {
+		parser := newParser(strings.NewReader("a: 1, a:${?b}"))
+		expected := Object{"a": &valueWithAlternative{
+			value:       Int(1),
+			alternative: &Substitution{path: "b", optional: true},
 		}}
 		got, err := parser.extractObject()
 		assertNoError(t, err)
-		if !reflect.DeepEqual(expected, got) {
-			t.Errorf("expected: %v, got: %v", expected, got)
+		assertDeepEqual(t, got, expected)
+	})
+
+	t.Run("extract valueWithAlternative value with duration type", func(t *testing.T) {
+		parser := newParser(strings.NewReader("a: 1s, a:${?b}"))
+		expected := Object{"a": &valueWithAlternative{
+			value:       Duration(time.Second),
+			alternative: &Substitution{path: "b", optional: true},
+		}}
+		got, err := parser.extractObject()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, expected)
+	})
+
+	t.Run("extract valueWithAlternative value with boolean type", func(t *testing.T) {
+		parser := newParser(strings.NewReader("a: true, a:${?b}"))
+		expected := Object{"a": &valueWithAlternative{
+			value:       Boolean(true),
+			alternative: &Substitution{path: "b", optional: true},
+		}}
+		got, err := parser.extractObject()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, expected)
+	})
+
+	t.Run("extract valueWithAlternative value and overwrite alternatives", func(t *testing.T) {
+		parser := newParser(strings.NewReader("a: static, a:${?b}"))
+		expected := Object{
+			"a": &valueWithAlternative{value: String("static"), alternative: &Substitution{path: "b", optional: true}},
 		}
+		got, err := parser.extractObject()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, expected)
 	})
 }
 

@@ -169,8 +169,8 @@ func processSubstitution(root Object, value Value, resolveFunc func(value Value)
 		}
 		resolveFunc(processed)
 		return nil
-	} else if valueType == stringWithAlternativeType {
-		withAlternative := value.(*stringWithAlternative)
+	} else if valueType == valueWithAlternativeType {
+		withAlternative := value.(*valueWithAlternative)
 		if withAlternative.alternative != nil {
 			processed, err := processSubstitutionType(root, withAlternative.alternative)
 			if err != nil {
@@ -306,16 +306,10 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 					(existingValue.Type() == ObjectType && value.Type() == SubstitutionType) ||
 					(existingValue.Type() == SubstitutionType && value.Type() == ObjectType) {
 					value = concatenation{existingValue, value}
-				} else if existingValue.Type() == StringType && value.Type() == SubstitutionType {
-					value = &stringWithAlternative{
-						value:       existingValue.(String),
-						alternative: value.(*Substitution),
-					}
-				} else if existingValue.Type() == stringWithAlternativeType && value.Type() == SubstitutionType {
-					value = &stringWithAlternative{
-						value:       existingValue.(*stringWithAlternative).value,
-						alternative: value.(*Substitution),
-					}
+				} else if existingValue.Type() == valueWithAlternativeType && value.Type() == SubstitutionType {
+					value = &valueWithAlternative{value: existingValue, alternative: value.(*Substitution)}
+				} else if value.Type() == SubstitutionType {
+					value = &valueWithAlternative{value: existingValue, alternative: value.(*Substitution)}
 				}
 			}
 
