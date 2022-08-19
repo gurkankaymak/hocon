@@ -363,6 +363,19 @@ func TestObject_String(t *testing.T) {
 			fail(t, got, "{a:1, b:2}")
 		}
 	})
+
+	t.Run("return the string of an object that contains a string element with the ':' character", func(t *testing.T) {
+		got := Object{"a": String("0.0.0.0:80")}.String()
+		assertEquals(t, got, "{a:\"0.0.0.0:80\"}")
+	})
+
+	t.Run("return the string of an object that contains multiple elements with the ':' character", func(t *testing.T) {
+		got := Object{"a": String("0.0.0.0:80"), "b": Int(2)}.String()
+		if got != "{a:\"0.0.0.0:80\", b:2}" && got != "{b:2, a:\"0.0.0.0:80\"}" {
+			fail(t, got, "{a:1, b:2}")
+		}
+	})
+
 }
 
 func TestArray_String(t *testing.T) {
@@ -379,6 +392,16 @@ func TestArray_String(t *testing.T) {
 	t.Run("return the string of an array that contains multiple elements", func(t *testing.T) {
 		got := Array{Int(1), Int(2)}.String()
 		assertEquals(t, got, "[1,2]")
+	})
+
+	t.Run("return the string of an array that contains a single elements with the ':' character", func(t *testing.T) {
+		got := Array{String("0.0.0.0:80")}.String()
+		assertEquals(t, got, "[\"0.0.0.0:80\"]")
+	})
+
+	t.Run("return the string of an array that contains multiple elements with the ':' character", func(t *testing.T) {
+		got := Array{String("0.0.0.0:80"), String("localhost:443")}.String()
+		assertEquals(t, got, "[\"0.0.0.0:80\",\"localhost:443\"]")
 	})
 }
 
