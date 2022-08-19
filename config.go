@@ -292,6 +292,7 @@ func (s String) String() string {
 	}
 	return str
 }
+
 func (s String) isConcatenable() bool { return true }
 
 // valueWithAlternative represents a value with Substitution which might override the original value
