@@ -283,8 +283,15 @@ type Value interface {
 type String string
 
 // Type String
-func (s String) Type() Type           { return StringType }
-func (s String) String() string       { return strings.Trim(string(s), `"`) }
+func (s String) Type() Type { return StringType }
+
+func (s String) String() string {
+	str := strings.Trim(string(s), `"`)
+	if strings.Contains(string(s), ":") {
+		return fmt.Sprintf(`"%s"`, str)
+	}
+	return str
+}
 func (s String) isConcatenable() bool { return true }
 
 // valueWithAlternative represents a value with Substitution which might override the original value

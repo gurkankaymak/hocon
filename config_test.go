@@ -355,11 +355,20 @@ func TestObject_String(t *testing.T) {
 	t.Run("return the string of an object that contains a single element", func(t *testing.T) {
 		got := Object{"a": Int(1)}.String()
 		assertEquals(t, got, "{a:1}")
+
+		got = Object{"a": String("0.0.0.0:80")}.String()
+		assertEquals(t, got, "{a:\"0.0.0.0:80\"}")
+
 	})
 
 	t.Run("return the string of an object that contains multiple elements", func(t *testing.T) {
 		got := Object{"a": Int(1), "b": Int(2)}.String()
 		if got != "{a:1, b:2}" && got != "{b:2, a:1}" {
+			fail(t, got, "{a:1, b:2}")
+		}
+
+		got = Object{"a": String("0.0.0.0:80"), "b": Int(2)}.String()
+		if got != "{a:\"0.0.0.0:80\", b:2}" && got != "{b:2, a:\"0.0.0.0:80\"}" {
 			fail(t, got, "{a:1, b:2}")
 		}
 	})
