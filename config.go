@@ -2,6 +2,7 @@ package hocon
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -287,7 +288,8 @@ func (s String) Type() Type { return StringType }
 
 func (s String) String() string {
 	str := strings.Trim(string(s), `"`)
-	if strings.Contains(string(s), ":") {
+	compile := regexp.MustCompile("[\x20-\x40|\x5b-\x60|\x7b-\x7e]+")
+	if compile.MatchString(str) {
 		return fmt.Sprintf(`"%s"`, str)
 	}
 	return str
