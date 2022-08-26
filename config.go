@@ -288,6 +288,9 @@ func (s String) Type() Type { return StringType }
 
 func (s String) String() string {
 	str := strings.Trim(string(s), `"`)
+	if str == "" {
+		return `""`
+	}
 	compile := regexp.MustCompile("[\x20-\x40|\x5b-\x60|\x7b-\x7e]+")
 	if compile.MatchString(str) {
 		return fmt.Sprintf(`"%s"`, str)
