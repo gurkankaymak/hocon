@@ -92,7 +92,7 @@ func main() {
       }
     }`
 
-    conf, err := hocon.ParseResource(hoconString)
+    conf, err := hocon.ParseString(hoconString)
     if err != nil {
         log.Fatal("error while parsing configuration: ", err)
     }
