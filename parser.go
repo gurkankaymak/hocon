@@ -637,6 +637,9 @@ func (p *parser) extractValue() (Value, error) {
 			return p.extractArray()
 		case isSubstitution(token, p.scanner.Peek()):
 			return p.extractSubstitution()
+		case isUnquotedString(token):
+			p.advance()
+			return String(token), nil
 		}
 	}
 

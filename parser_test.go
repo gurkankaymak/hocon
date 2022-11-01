@@ -1206,6 +1206,14 @@ func TestExtractValue(t *testing.T) {
 		assertDeepEqual(t, got, expected)
 	})
 
+	t.Run("extract unquoted string value if the value is non-alphanumeric and non-forbidden character", func(t *testing.T) {
+		parser := newParser(strings.NewReader("a:bbb.ccc"))
+		advanceScanner(t, parser, ".")
+		got, err := parser.extractValue()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, String("."))
+	})
+
 	t.Run("return error for an unknown value", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a:&"))
 		advanceScanner(t, parser, "&")
