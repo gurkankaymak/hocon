@@ -492,6 +492,14 @@ func TestExtractObject(t *testing.T) {
 		assertEquals(t, got.String(), expected.String())
 	})
 
+	t.Run("should parse properly if the line ends with a comment", func(t *testing.T) {
+		parser := newParser(strings.NewReader(`name: value #this is a comment`))
+		parser.advance()
+		got, err := parser.extractObject()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, Object{"name": String("value")})
+	})
+
 	t.Run("return missingCommaError if there is no comma or ASCII newline between the object elements", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a:1 b:2}"))
 		parser.advance()
