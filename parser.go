@@ -742,7 +742,7 @@ func (p *parser) extractSubstitution() (*Substitution, error) {
 }
 
 func (p *parser) consumeComment() {
-	for token := p.scanner.Peek(); token != '\n' && token != scanner.EOF; token = p.scanner.Peek() {
+	for token := p.scanner.Peek(); token != '\n' && token != scanner.EOF && !strings.HasSuffix(p.scanner.TokenText(), "\n"); token = p.scanner.Peek() {
 		p.advance()
 	}
 	p.advance()

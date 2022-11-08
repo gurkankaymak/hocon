@@ -500,6 +500,18 @@ func TestExtractObject(t *testing.T) {
 		assertDeepEqual(t, got, Object{"name": String("value")})
 	})
 
+	t.Run("should parse properly if the comment contains a `'` character (which results golang scanner to append `\n` to the latest token instead of a separate token)", func(t *testing.T) {
+		config := `
+		# it's a comment
+		name: value
+		`
+		parser := newParser(strings.NewReader(config))
+		parser.advance()
+		got, err := parser.extractObject()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, Object{"name": String("value")})
+	})
+
 	t.Run("return missingCommaError if there is no comma or ASCII newline between the object elements", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a:1 b:2}"))
 		parser.advance()
