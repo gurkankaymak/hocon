@@ -997,11 +997,11 @@ func TestParseIncludedResource(t *testing.T) {
 	})
 
 	t.Run("parse the included resource and return the parsed object if there is no error", func(t *testing.T) {
-		parser := newParser(strings.NewReader(`include "testdata/a.conf"`))
-		advanceScanner(t, parser, `"testdata/a.conf"`)
+		parser := newParser(strings.NewReader(`include "testdata/x.conf"`))
+		advanceScanner(t, parser, `"testdata/x.conf"`)
 		got, err := parser.parseIncludedResource()
 		assertNoError(t, err)
-		assertDeepEqual(t, got, Object{"a": Int(1)})
+		assertDeepEqual(t, got, Object{"a": Int(1), "x": Int(7), "y": String("foo")})
 	})
 }
 
