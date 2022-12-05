@@ -202,6 +202,19 @@ func TestExtractObject(t *testing.T) {
 		assertDeepEqual(t, got, expected)
 	})
 
+	t.Run("merge multiple included objects with the existing", func(t *testing.T) {
+		parser := newParser(strings.NewReader(
+			`c:3
+			include "testdata/a.conf"
+			include "testdata/b.conf"
+		`))
+		parser.advance()
+		expected := Object{"a": Int(1), "b": Int(2), "c": Int(3)}
+		got, err := parser.extractObject()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, expected)
+	})
+
 	t.Run("parse correctly if the last line is a comment", func(t *testing.T) {
 		config := `{
 			a: 1

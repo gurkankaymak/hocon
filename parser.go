@@ -241,7 +241,7 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 			p.consumeComment()
 		}
 
-		if p.scanner.TokenText() == includeToken {
+		for p.scanner.TokenText() == includeToken {
 			p.advance()
 
 			includedObject, err := p.parseIncludedResource()
