@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 	"text/scanner"
@@ -35,9 +36,23 @@ type parser struct {
 	scanner                 *scanner.Scanner
 	currentRune             rune
 	lastConsumedWhitespaces string // used in concatenation not to lose whitespaces between values
+	filepath                string
 }
 
 func newParser(src io.Reader) *parser {
+	s := newScanner(src)
+	currWd := "."
+
+	return &parser{scanner: s, filepath: currWd}
+}
+
+func newFileParser(src *os.File) *parser {
+	s := newScanner(src)
+
+	return &parser{scanner: s, filepath: src.Name()}
+}
+
+func newScanner(src io.Reader) *scanner.Scanner {
 	s := new(scanner.Scanner)
 	s.Init(src)
 	s.Whitespace ^= 1<<'\t' | 1<<' '            // do not skip tabs and spaces
@@ -46,7 +61,7 @@ func newParser(src io.Reader) *parser {
 		return ch == '_' || ch == '-' || unicode.IsLetter(ch) || unicode.IsDigit(ch) && i > 0
 	}
 
-	return &parser{scanner: s}
+	return s
 }
 
 // ParseString function parses the given hocon string, creates the configuration tree and
@@ -64,7 +79,7 @@ func ParseResource(path string) (*Config, error) {
 		return nil, fmt.Errorf("could not parse resource: %w", err)
 	}
 
-	return newParser(file).parse()
+	return newFileParser(file).parse()
 }
 
 func (p *parser) parse() (*Config, error) {
@@ -469,7 +484,9 @@ func (p *parser) parseIncludedResource() (includeObject Object, err error) {
 		return nil, err
 	}
 
-	file, err := os.Open(includeToken.path)
+	parsedFileParentDir := path.Dir(p.filepath)
+	includePath := path.Join(parsedFileParentDir, includeToken.path)
+	file, err := os.Open(includePath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) && !includeToken.required {
 			return Object{}, nil
@@ -478,7 +495,7 @@ func (p *parser) parseIncludedResource() (includeObject Object, err error) {
 		return nil, fmt.Errorf("could not parse resource: %w", err)
 	}
 
-	includeParser := newParser(file)
+	includeParser := newFileParser(file)
 
 	defer func() {
 		if closingErr := file.Close(); closingErr != nil {
