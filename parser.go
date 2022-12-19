@@ -663,7 +663,12 @@ func (p *parser) extractValue() (Value, error) {
 	case scanner.Float:
 		value, err := strconv.ParseFloat(token, 64)
 		if err != nil {
-			return nil, err
+			if isUnquotedString(token) {
+				p.advance()
+				return String(token), nil
+			} else {
+				return nil, err
+			}
 		}
 
 		durationUnit := p.extractDurationUnit()

@@ -559,6 +559,14 @@ func TestExtractObject(t *testing.T) {
 		assertError(t, err, expectedError)
 		assertNil(t, got)
 	})
+
+	t.Run("extract the object with unquoted string that starts with number and contains an 'e' (which causes Scanner library to recognize it as float)", func(t *testing.T) {
+		parser := newParser(strings.NewReader("uuid: 123e4567-e89b-12d3-a456-426614174000"))
+		parser.advance()
+		got, err := parser.extractObject()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, Object{"uuid": concatenation{String("123e4567"), String(""), String("-e89b-12d3-a456-426614174000")}})
+	})
 }
 
 func TestMergeObjects(t *testing.T) {
@@ -1158,6 +1166,14 @@ func TestExtractValue(t *testing.T) {
 		got, err := parser.extractValue()
 		assertNoError(t, err)
 		assertEquals(t, got, Float64(1.5))
+	})
+
+	t.Run("extract the value that starts with number and contains an 'e' (which causes Scanner library to recognize it as float)", func(t *testing.T) {
+		parser := newParser(strings.NewReader("uuid = 123e4567-e89b-12d3-a456-426614174000"))
+		advanceScanner(t, parser, "123e4567")
+		got, err := parser.extractValue()
+		assertNoError(t, err)
+		assertEquals(t, got, String("123e4567"))
 	})
 
 	t.Run("extract multi-line string", func(t *testing.T) {
