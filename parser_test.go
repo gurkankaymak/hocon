@@ -528,7 +528,7 @@ func TestExtractObject(t *testing.T) {
 	t.Run("return missingCommaError if there is no comma or ASCII newline between the object elements", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a:1 b:2}"))
 		parser.advance()
-		expectedError := missingCommaError(1, 6)
+		expectedError := missingCommaError(1, 7)
 		got, err := parser.extractObject()
 		assertError(t, err, expectedError)
 		assertNil(t, got)
@@ -1054,6 +1054,14 @@ func TestExtractArray(t *testing.T) {
 		assertNil(t, got)
 	})
 
+	t.Run("extract the array successfully if it contains an unquoted string value", func(t *testing.T) {
+		parser := newParser(strings.NewReader("[example.com]"))
+		parser.advance()
+		got, err := parser.extractArray()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, Array{concatenation{String("example"), String(""), String("."), String(""), String("com")}})
+	})
+
 	t.Run("return invalidArrayError if the closing parenthesis is missing", func(t *testing.T) {
 		parser := newParser(strings.NewReader("[1"))
 		parser.advance()
@@ -1063,10 +1071,10 @@ func TestExtractArray(t *testing.T) {
 		assertNil(t, got)
 	})
 
-	t.Run("return missingCommaError if there is no comma or ASCII newline between the array elements", func(t *testing.T) {
-		parser := newParser(strings.NewReader("[1 2]"))
+	t.Run("return missingCommaError if there is no comma or ASCII newline between the array elements and elements separated with a forbidden character", func(t *testing.T) {
+		parser := newParser(strings.NewReader("[1@2]"))
 		parser.advance()
-		expectedError := missingCommaError(1, 4)
+		expectedError := missingCommaError(1, 3)
 		got, err := parser.extractArray()
 		assertError(t, err, expectedError)
 		assertNil(t, got)
@@ -1489,9 +1497,9 @@ func TestCheckAndConcatenate(t *testing.T) {
 	})
 
 	t.Run("return false if the value with the given is not concatenable", func(t *testing.T) {
-		parser := newParser(strings.NewReader("a:1 bb"))
+		parser := newParser(strings.NewReader("a:1s bb"))
 		advanceScanner(t, parser, "bb")
-		got, err := parser.checkAndConcatenate(Object{"a": Int(1)}, "a")
+		got, err := parser.checkAndConcatenate(Object{"a": Duration(1)}, "a")
 		assertNoError(t, err)
 		assertEquals(t, got, false)
 	})
@@ -1534,5 +1542,43 @@ func TestCheckAndConcatenate(t *testing.T) {
 		assertEquals(t, got, true)
 		expected := Object{"a": concatenation{String("aa"), String(" "), String("bb")}}
 		assertEquals(t, object.String(), expected.String())
+	})
+}
+
+func TestCheckConcatenation(t *testing.T) {
+	t.Run("return nil if the value with the given is not concatenable", func(t *testing.T) {
+		parser := newParser(strings.NewReader("[1s bb]"))
+		advanceScanner(t, parser, "bb")
+		got, err := parser.checkConcatenation(Array{Duration(1)})
+		assertNoError(t, err)
+		assertNil(t, got)
+	})
+
+	t.Run("return nil if the current token is not concatenable", func(t *testing.T) {
+		parser := newParser(strings.NewReader("[abc 1s]"))
+		advanceScanner(t, parser, "1")
+		got, err := parser.checkConcatenation(Array{String("abc")})
+		assertNoError(t, err)
+		assertNil(t, got)
+	})
+
+	t.Run("concatenate the value to the previous value if the previous one is a concatenation", func(t *testing.T) {
+		parser := newParser(strings.NewReader("[aa bb cc]"))
+		advanceScanner(t, parser, "cc")
+		whitespace := parser.lastConsumedWhitespaces
+		a := concatenation{String("aa"), String(whitespace), String("bb")}
+		got, err := parser.checkConcatenation(a)
+		assertNoError(t, err)
+		expected := concatenation{String("aa"), String(whitespace), String("bb"), String(whitespace), String("cc")}
+		assertDeepEqual(t, got, expected)
+	})
+
+	t.Run("create a concatenation with the value and the previous value if the previous one is not a concatenation", func(t *testing.T) {
+		parser := newParser(strings.NewReader("[aa bb]"))
+		advanceScanner(t, parser, "bb")
+		got, err := parser.checkConcatenation(String("aa"))
+		assertNoError(t, err)
+		expected := concatenation{String("aa"), String(" "), String("bb")}
+		assertEquals(t, got.String(), expected.String())
 	})
 }

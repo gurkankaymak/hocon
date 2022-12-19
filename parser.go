@@ -533,6 +533,25 @@ func (p *parser) checkAndConcatenate(object Object, key string) (bool, error) {
 	return false, nil
 }
 
+func (p *parser) checkConcatenation(lastValue Value) (Value, error) {
+	if lastValue.isConcatenable() && p.isTokenConcatenable(p.scanner.TokenText(), p.scanner.Peek()) {
+		lastConsumedWhitespaces := p.lastConsumedWhitespaces
+
+		value, err := p.extractValue()
+		if err != nil {
+			return nil, err
+		}
+
+		if lastValue.Type() == ConcatenationType {
+			return append(lastValue.(concatenation), String(lastConsumedWhitespaces), value), nil
+		} else {
+			return concatenation{lastValue, String(lastConsumedWhitespaces), value}, nil
+		}
+	}
+
+	return nil, nil
+}
+
 func (p *parser) extractArray() (Array, error) {
 	if firstToken := p.scanner.TokenText(); firstToken != arrayStartToken {
 		return nil, invalidArrayError(fmt.Sprintf("%q is not an array start token", firstToken), p.scanner.Line, p.scanner.Column)
@@ -563,11 +582,35 @@ func (p *parser) extractArray() (Array, error) {
 			return nil, err
 		}
 
-		array = append(array, value)
+		//array = append(array, value)
 		token = p.scanner.TokenText()
 
 		if p.scanner.Line == lastRow && token != commaToken && token != arrayEndToken {
-			return nil, missingCommaError(p.scanner.Line, p.scanner.Column)
+			if isUnquotedString(token) {
+				concatenatedValue, err := p.checkConcatenation(value)
+				if err != nil {
+					return nil, err
+				}
+				lastValue := concatenatedValue
+				token = p.scanner.TokenText()
+				for concatenatedValue != nil && isUnquotedString(token) && token != commaToken && token != arrayEndToken {
+					concatenatedValue, err = p.checkConcatenation(lastValue)
+					if err != nil {
+						return nil, err
+					}
+					if concatenatedValue != nil {
+						lastValue = concatenatedValue
+					} else {
+						break
+					}
+					token = p.scanner.TokenText()
+				}
+				array = append(array, lastValue)
+			} else {
+				return nil, missingCommaError(p.scanner.Line, p.scanner.Column)
+			}
+		} else {
+			array = append(array, value)
 		}
 
 		if p.scanner.TokenText() == commaToken {

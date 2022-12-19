@@ -414,7 +414,7 @@ type Int int
 // Type Number
 func (i Int) Type() Type           { return NumberType }
 func (i Int) String() string       { return strconv.Itoa(int(i)) }
-func (i Int) isConcatenable() bool { return false }
+func (i Int) isConcatenable() bool { return true }
 
 // Float32 represents a Float32 value
 type Float32 float32
