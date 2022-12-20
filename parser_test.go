@@ -567,6 +567,25 @@ func TestExtractObject(t *testing.T) {
 		assertNoError(t, err)
 		assertDeepEqual(t, got, Object{"uuid": concatenation{String("123e4567"), String(""), String("-e89b-12d3-a456-426614174000")}})
 	})
+
+	t.Run("extract the object that contains an array with substitution and concatenation", func(t *testing.T) {
+		parser := newParser(strings.NewReader(`{x:a, y:b, arr: [${x}"."${y}]}`))
+		parser.advance()
+		got, err := parser.extractObject()
+		expected := Object{
+			"x": String("a"),
+			"y": String("b"),
+			"arr": Array{concatenation{
+				&Substitution{path: "x", optional: false},
+				String(""),
+				String("."),
+				String(""),
+				&Substitution{path: "y", optional: false},
+			}},
+		}
+		assertNoError(t, err)
+		assertDeepEqual(t, got, expected)
+	})
 }
 
 func TestMergeObjects(t *testing.T) {

@@ -582,18 +582,19 @@ func (p *parser) extractArray() (Array, error) {
 			return nil, err
 		}
 
-		//array = append(array, value)
 		token = p.scanner.TokenText()
 
 		if p.scanner.Line == lastRow && token != commaToken && token != arrayEndToken {
-			if isUnquotedString(token) {
-				concatenatedValue, err := p.checkConcatenation(value)
-				if err != nil {
-					return nil, err
-				}
+			concatenatedValue, err := p.checkConcatenation(value)
+			if err != nil {
+				return nil, err
+			}
+			if concatenatedValue == nil {
+				return nil, missingCommaError(p.scanner.Line, p.scanner.Column)
+			} else {
 				lastValue := concatenatedValue
 				token = p.scanner.TokenText()
-				for concatenatedValue != nil && isUnquotedString(token) && token != commaToken && token != arrayEndToken {
+				for concatenatedValue != nil && token != commaToken && token != arrayEndToken {
 					concatenatedValue, err = p.checkConcatenation(lastValue)
 					if err != nil {
 						return nil, err
@@ -606,8 +607,6 @@ func (p *parser) extractArray() (Array, error) {
 					token = p.scanner.TokenText()
 				}
 				array = append(array, lastValue)
-			} else {
-				return nil, missingCommaError(p.scanner.Line, p.scanner.Column)
 			}
 		} else {
 			array = append(array, value)
