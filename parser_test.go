@@ -170,6 +170,14 @@ func TestExtractObject(t *testing.T) {
 		assertDeepEqual(t, got, Object{"a": Object{"b": Int(1)}, "c": Int(2)})
 	})
 
+	t.Run("extract nested object with the value of unquoted string", func(t *testing.T) {
+		parser := newParser(strings.NewReader("x {a.b:10cc}"))
+		parser.advance()
+		got, err := parser.extractObject()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, Object{"x": Object{"a": Object{"b": concatenation{Int(10), String(""), String("cc")}}}})
+	})
+
 	t.Run("skip the comments inside objects", func(t *testing.T) {
 		config := `{
 			# this is a comment

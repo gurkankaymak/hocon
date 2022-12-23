@@ -341,10 +341,6 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 			}
 		}
 
-		if parenthesisBalanced && len(isSubObject) > 0 && isSubObject[0] {
-			return object, nil
-		}
-
 		for currentRow := p.scanner.Line; currentRow == lastRow && p.scanner.TokenText() != ""; currentRow = p.scanner.Line {
 			concatenated, err := p.checkAndConcatenate(object, key)
 			if err != nil {
@@ -354,6 +350,10 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 			if !concatenated {
 				break
 			}
+		}
+
+		if parenthesisBalanced && len(isSubObject) > 0 && isSubObject[0] {
+			return object, nil
 		}
 
 		for p.scanner.TokenText() == commentToken {
