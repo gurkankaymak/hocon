@@ -125,6 +125,11 @@ func (p *parser) advance() {
 }
 
 func resolveSubstitutions(root Object, valueOptional ...Value) error {
+	visitedPaths := make(map[string]bool)
+	return resolveAcyclicSubstitutions(root, visitedPaths, valueOptional...)
+}
+
+func resolveAcyclicSubstitutions(root Object, visitedPaths map[string]bool, valueOptional ...Value) error {
 	var value Value
 	if valueOptional == nil {
 		value = root
@@ -135,21 +140,21 @@ func resolveSubstitutions(root Object, valueOptional ...Value) error {
 	switch v := value.(type) {
 	case Array:
 		for i, value := range v {
-			err := processSubstitution(root, value, func(foundValue Value) { v[i] = foundValue })
+			err := processSubstitution(root, value, visitedPaths, func(foundValue Value) { v[i] = foundValue })
 			if err != nil {
 				return err
 			}
 		}
 	case concatenation:
 		for i, value := range v {
-			err := processSubstitution(root, value, func(foundValue Value) { v[i] = foundValue })
+			err := processSubstitution(root, value, visitedPaths, func(foundValue Value) { v[i] = foundValue })
 			if err != nil {
 				return err
 			}
 		}
 	case Object:
 		for key, value := range v {
-			err := processSubstitution(root, value, func(foundValue Value) { v[key] = foundValue })
+			err := processSubstitution(root, value, visitedPaths, func(foundValue Value) { v[key] = foundValue })
 			if err != nil {
 				return err
 			}
@@ -176,9 +181,9 @@ func resolveSubstitutions(root Object, valueOptional ...Value) error {
 	return nil
 }
 
-func processSubstitution(root Object, value Value, resolveFunc func(value Value)) error {
+func processSubstitution(root Object, value Value, visitedPaths map[string]bool, resolveFunc func(value Value)) error {
 	if valueType := value.Type(); valueType == SubstitutionType {
-		processed, err := processSubstitutionType(root, value.(*Substitution))
+		processed, err := processSubstitutionType(root, value.(*Substitution), visitedPaths)
 		if err != nil {
 			return err
 		}
@@ -187,7 +192,7 @@ func processSubstitution(root Object, value Value, resolveFunc func(value Value)
 	} else if valueType == valueWithAlternativeType {
 		withAlternative := value.(*valueWithAlternative)
 		if withAlternative.alternative != nil {
-			processed, err := processSubstitutionType(root, withAlternative.alternative)
+			processed, err := processSubstitutionType(root, withAlternative.alternative, visitedPaths)
 			if err != nil {
 				return err
 			}
@@ -199,14 +204,25 @@ func processSubstitution(root Object, value Value, resolveFunc func(value Value)
 		resolveFunc(withAlternative.value)
 		return nil
 	} else if valueType == ObjectType || valueType == ArrayType || valueType == ConcatenationType {
-		return resolveSubstitutions(root, value)
+		return resolveAcyclicSubstitutions(root, visitedPaths, value)
 	}
 
 	return nil
 }
 
-func processSubstitutionType(root Object, substitution *Substitution) (Value, error) {
+func processSubstitutionType(root Object, substitution *Substitution, visitedPaths map[string]bool) (Value, error) {
+	if _, ok := visitedPaths[substitution.path]; ok {
+		return nil, errors.New("detected substitution cycle: " + substitution.String())
+	}
+
 	if foundValue := root.find(substitution.path); foundValue != nil {
+		visitedPaths[substitution.path] = true
+
+		if err := processSubstitution(root, foundValue, visitedPaths, func(v Value) { foundValue = v }); err != nil {
+			return nil, err
+		}
+
+		delete(visitedPaths, substitution.path)
 		return foundValue, nil
 	} else if env, ok := os.LookupEnv(substitution.path); ok {
 		return String(env), nil
