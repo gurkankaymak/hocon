@@ -673,6 +673,46 @@ func TestResolveSubstitutions(t *testing.T) {
 		}
 	})
 
+	t.Run("resolve transitive substitutions in unordered Object map", func(t *testing.T) {
+		value := Int(5)
+		object := Object{
+			"a": value,
+			"b": &Substitution{path: "a", optional: false},
+			"c": &Substitution{path: "b", optional: false},
+		}
+
+		var err error
+
+		visitedPaths := make(map[string]bool)
+		err = processSubstitution(object, object.find("c"), visitedPaths, func(foundValue Value) { object["c"] = foundValue })
+		assertNoError(t, err)
+		err = processSubstitution(object, object.find("b"), visitedPaths, func(foundValue Value) { object["b"] = foundValue })
+		assertNoError(t, err)
+
+		if value != object["b"] {
+			t.Errorf("expected default value: %s, got: %s", value, object["b"])
+		}
+
+		if value != object["c"] {
+			t.Errorf("expected default value: %s, got: %s", value, object["c"])
+		}
+	})
+
+	t.Run("return an error if substitution cycle detected", func(t *testing.T) {
+		object := Object{
+			"a": &Substitution{path: "b", optional: false},
+			"b": &Substitution{path: "c", optional: false},
+			"c": &Substitution{path: "a", optional: false},
+		}
+
+		var err error
+
+		visitedPaths := make(map[string]bool)
+		err = processSubstitution(object, object.find("a"), visitedPaths, func(foundValue Value) { object["c"] = foundValue })
+		expectedErr := errors.New("detected substitution cycle: ${b}")
+		assertError(t, err, expectedErr)
+	})
+
 	t.Run("return an error if cannot find required substitution and default value was provided", func(t *testing.T) {
 		defaultValue := String("default")
 		envSubstitution := &Substitution{path: "TEST_ENV", optional: false}
