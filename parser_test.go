@@ -1172,6 +1172,14 @@ func TestExtractArray(t *testing.T) {
 		assertDeepEqual(t, got, Array{Int(1)})
 	})
 
+	t.Run("extract the array without an error when the trailing comma is followed by a comment", func(t *testing.T) {
+		parser := newParser(strings.NewReader("[1,#comment\n]"))
+		parser.advance()
+		got, err := parser.extractArray()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, Array{Int(1)})
+	})
+
 	t.Run("extract the array without an error if if elements are separated with ASCII newline", func(t *testing.T) {
 		parser := newParser(strings.NewReader("[1\n2]"))
 		parser.advance()

@@ -633,7 +633,12 @@ func (p *parser) extractArray() (Array, error) {
 
 			token = p.scanner.TokenText()
 
-			if p.scanner.TokenText() == commaToken {
+			if token == commentToken {
+				p.consumeComment()
+				token = p.scanner.TokenText()
+			}
+
+			if token == commaToken {
 				return nil, adjacentCommasError(p.scanner.Line, p.scanner.Column)
 			}
 		}
