@@ -291,7 +291,8 @@ func (s String) String() string {
 	if str == "" {
 		return `""`
 	}
-	compile := regexp.MustCompile("[\x20-\x40|\x5b-\x60|\x7b-\x7e]+")
+	compile := regexp.MustCompile("[ !\\\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~]+")
+
 	if compile.MatchString(str) {
 		return fmt.Sprintf(`"%s"`, str)
 	}
