@@ -278,6 +278,10 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 		}
 
 		key := strings.Trim(p.scanner.TokenText(), `"`)
+		if strings.HasPrefix(key, dotToken) && key != dotToken {
+			key = strings.TrimPrefix(key, dotToken)
+		}
+
 		if forbiddenCharacters[key] {
 			return nil, invalidKeyError(key, p.scanner.Line, p.scanner.Column)
 		}
@@ -289,11 +293,13 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 		p.advance()
 		text := p.scanner.TokenText()
 
-		if text == dotToken || text == objectStartToken {
+		startsWithDot := strings.HasPrefix(text, dotToken) && text != dotToken
+
+		if text == dotToken || text == objectStartToken || startsWithDot {
 			if text == dotToken {
 				p.advance() // skip "."
 
-				if p.scanner.TokenText() == dotToken {
+				if p.scanner.TokenText() == dotToken || strings.HasPrefix(p.scanner.TokenText(), dotToken) {
 					return nil, adjacentPeriodsError(p.scanner.Line, p.scanner.Column)
 				}
 
