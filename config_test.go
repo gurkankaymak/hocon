@@ -352,6 +352,11 @@ func TestObject_String(t *testing.T) {
 		assertEquals(t, got, "{}")
 	})
 
+	t.Run("return the string of an object that contains a empty string", func(t *testing.T) {
+		got := Object{"a": String("")}.String()
+		assertEquals(t, got, "{a:\"\"}")
+	})
+
 	t.Run("return the string of an object that contains a single element", func(t *testing.T) {
 		got := Object{"a": Int(1)}.String()
 		assertEquals(t, got, "{a:1}")
@@ -364,24 +369,28 @@ func TestObject_String(t *testing.T) {
 		}
 	})
 
-	t.Run("return the string of an object that contains a string element with the ':' character", func(t *testing.T) {
-		got := Object{"a": String("0.0.0.0:80")}.String()
-		assertEquals(t, got, "{a:\"0.0.0.0:80\"}")
+	t.Run("return the string of an object that contains a single element with the forbidden characters", func(t *testing.T) {
+		got := Object{"a": String("!@#$%^&*()_+{}[];:',./<>?\"\\")}.String()
+		assertEquals(t, got, "{a:\"!@#$%^&*()_+{}[];:',./<>?\"\\\"}")
 	})
 
-	t.Run("return the string of an object that contains multiple elements with the ':' character", func(t *testing.T) {
-		got := Object{"a": String("0.0.0.0:80"), "b": Int(2)}.String()
-		if got != "{a:\"0.0.0.0:80\", b:2}" && got != "{b:2, a:\"0.0.0.0:80\"}" {
-			fail(t, got, "{a:1, b:2}")
+	t.Run("return the string of an object that contains multiple elements with the forbidden characters", func(t *testing.T) {
+		got := Object{"a": String("!@#$%^&*()_+{}[];:',./<>?\"\\"), "b": Int(2)}.String()
+		if got != "{a:\"!@#$%^&*()_+{}[];:',./<>?\"\\\", b:2}" && got != "{b:2, a:\"!@#$%^&*()_+{}[];:',./<>?\"}" {
+			fail(t, got, "{a:\"!@#$%^&*()_+{}[];:',./<>?\"\\\", b:2}")
 		}
 	})
-
 }
 
 func TestArray_String(t *testing.T) {
 	t.Run("return the string of an empty array", func(t *testing.T) {
 		got := Array{}.String()
 		assertEquals(t, got, "[]")
+	})
+
+	t.Run("return the string of an object that contains a empty string", func(t *testing.T) {
+		got := Array{String("")}.String()
+		assertEquals(t, got, "[\"\"]")
 	})
 
 	t.Run("return the string of an array that contains a single element", func(t *testing.T) {
@@ -395,13 +404,13 @@ func TestArray_String(t *testing.T) {
 	})
 
 	t.Run("return the string of an array that contains a single elements with the ':' character", func(t *testing.T) {
-		got := Array{String("0.0.0.0:80")}.String()
-		assertEquals(t, got, "[\"0.0.0.0:80\"]")
+		got := Array{String("!@#$%^&*()_+{}[];:',./<>?\"\\")}.String()
+		assertEquals(t, got, "[\"!@#$%^&*()_+{}[];:',./<>?\"\\\"]")
 	})
 
 	t.Run("return the string of an array that contains multiple elements with the ':' character", func(t *testing.T) {
-		got := Array{String("0.0.0.0:80"), String("localhost:443")}.String()
-		assertEquals(t, got, "[\"0.0.0.0:80\",\"localhost:443\"]")
+		got := Array{String("!@#$%^&*()_+"), String("{}[]|;':\",./<>?\\")}.String()
+		assertEquals(t, got, "[\"!@#$%^&*()_+\",\"{}[]|;':\",./<>?\\\"]")
 	})
 }
 
