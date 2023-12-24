@@ -605,6 +605,10 @@ func (p *parser) extractArray() (Array, error) {
 		}
 
 		token = p.scanner.TokenText()
+		if token == commentToken {
+			p.consumeComment()
+			token = p.scanner.TokenText()
+		}
 
 		if p.scanner.Line == lastRow && token != commaToken && token != arrayEndToken {
 			concatenatedValue, err := p.checkConcatenation(value)
