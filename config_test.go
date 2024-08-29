@@ -376,7 +376,7 @@ func TestObject_String(t *testing.T) {
 
 	t.Run("return the string of an object that contains multiple elements with the forbidden characters", func(t *testing.T) {
 		got := Object{"a": String("!@#$%^&*()_+{}[];:',./<>?\"\\"), "b": Int(2)}.String()
-		if got != "{a:\"!@#$%^&*()_+{}[];:',./<>?\"\\\", b:2}" && got != "{b:2, a:\"!@#$%^&*()_+{}[];:',./<>?\"}" {
+		if got != "{a:\"!@#$%^&*()_+{}[];:',./<>?\"\\\", b:2}" && got != "{b:2, a:\"!@#$%^&*()_+{}[];:',./<>?\"\\\"}" {
 			fail(t, got, "{a:\"!@#$%^&*()_+{}[];:',./<>?\"\\\", b:2}")
 		}
 	})
