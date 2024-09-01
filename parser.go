@@ -253,11 +253,12 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 	lastRow := 0
 
 	for tok := p.scanner.Peek(); tok != scanner.EOF; tok = p.scanner.Peek() {
-		for p.scanner.TokenText() == commentToken {
+		if p.scanner.TokenText() == commentToken {
 			p.consumeComment()
+			continue
 		}
 
-		for p.scanner.TokenText() == includeToken {
+		if p.scanner.TokenText() == includeToken {
 			p.advance()
 
 			includedObject, err := p.parseIncludedResource()
@@ -267,6 +268,7 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 
 			mergeObjects(object, includedObject)
 			p.advance()
+			continue
 		}
 
 		if !parenthesisBalanced && p.scanner.TokenText() == objectEndToken {
