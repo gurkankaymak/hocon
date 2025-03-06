@@ -302,6 +302,9 @@ func TestWithFallback(t *testing.T) {
 	config1 := &Config{Object{"a": String("aa"), "b": String("bb")}}
 	config2 := &Config{Object{"a": String("aaa"), "c": String("cc")}}
 	config3 := &Config{Array{Int(1), Int(2)}}
+	config4 := &Config{Object{"a": String("aa")}}
+	config5 := &Config{Object{"a": nil}}
+	config6 := &Config{Object{"a": Object{"a": String("aa"), "b": String("bb")}}}
 
 	t.Run("merge the given fallback config with the current config if the root of both of them are of type Object (for the same keys current config should override the fallback)", func(t *testing.T) {
 		expected := &Config{Object{"a": String("aa"), "b": String("bb"), "c": String("cc")}}
@@ -317,6 +320,21 @@ func TestWithFallback(t *testing.T) {
 	t.Run("return the current config if the root of it is not an Object", func(t *testing.T) {
 		got := config3.WithFallback(config1)
 		assertDeepEqual(t, got, config3)
+	})
+
+	t.Run("return the current value if new value is nil", func(t *testing.T) {
+		got := config4.WithFallback(config5)
+		assertDeepEqual(t, got, config4)
+	})
+
+	t.Run("rewrite the current value if old value is nil and new value is not nil", func(t *testing.T) {
+		got := config5.WithFallback(config4)
+		assertDeepEqual(t, got, config4)
+	})
+
+	t.Run("rewrite the current value if old value is nil and new value is not nil and Object", func(t *testing.T) {
+		got := config5.WithFallback(config6)
+		assertDeepEqual(t, got, config6)
 	})
 }
 
