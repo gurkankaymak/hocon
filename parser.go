@@ -418,13 +418,15 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 func mergeObjects(existing Object, new Object) {
 	for key, value := range new {
 		existingValue, ok := existing[key]
-		if ok && existingValue.Type() == ObjectType && value.Type() == ObjectType {
+		if ok && existingValue != nil && existingValue.Type() == ObjectType && value != nil &&
+			value.Type() == ObjectType {
 			existingObj := existingValue.(Object)
 			mergeObjects(existingObj, value.(Object))
 			value = existingObj
 		}
-
-		existing[key] = value
+		if value != nil {
+			existing[key] = value
+		}
 	}
 }
 
