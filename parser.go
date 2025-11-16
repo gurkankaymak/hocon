@@ -225,7 +225,9 @@ func processSubstitutionType(root Object, substitution *Substitution, visitedPat
 		delete(visitedPaths, substitution.path)
 		return foundValue, nil
 	} else if env, ok := os.LookupEnv(substitution.path); ok {
-		return String(env), nil
+		p := newParser(strings.NewReader(env))
+		p.advance()
+		return p.extractValue()
 	} else if !substitution.optional {
 		return nil, errors.New("could not resolve substitution: " + substitution.String() + " to a value")
 	}
