@@ -680,43 +680,6 @@ func TestResolveSubstitutions(t *testing.T) {
 			t.Errorf("expected value: %s from environment variable: %s, got: %s", expected, testEnv, object["a"])
 		}
 	})
-	t.Run("resolve duration environment variable", func(t *testing.T) {
-		gotString, err := ParseString("{a:1s}")
-		assertNoError(t, err)
-		testEnv := "TEST_ENV"
-		err = os.Setenv(testEnv, "1s")
-		assertNoError(t, err)
-		gotEnv, err := ParseString("{a:${TEST_ENV}}")
-		assertNoError(t, err)
-		err = os.Unsetenv(testEnv)
-		assertNoError(t, err)
-		assertEquals(t, gotString.GetDuration("a"), gotEnv.GetDuration("a"))
-	})
-	t.Run("resolve array environment variable", func(t *testing.T) {
-		gotString, err := ParseString("{a:[1s, 2s]}")
-		assertNoError(t, err)
-		testEnv := "TEST_ENV"
-		err = os.Setenv(testEnv, "[1s, 2s]")
-		assertNoError(t, err)
-		gotEnv, err := ParseString("{a:${TEST_ENV}}")
-		assertNoError(t, err)
-		err = os.Unsetenv(testEnv)
-		assertNoError(t, err)
-		assertEquals(t, gotString.GetArray("a").String(), gotEnv.GetArray("a").String())
-	})
-	t.Run("resolve structured environment variable", func(t *testing.T) {
-		gotString, err := ParseString("{a:{b:1s, c:{d:2}}}")
-		assertNoError(t, err)
-		testEnv := "TEST_ENV"
-		err = os.Setenv(testEnv, "{b:1s, c:{d:2}}")
-		assertNoError(t, err)
-		gotEnv, err := ParseString("{a:${TEST_ENV}}")
-		assertNoError(t, err)
-		err = os.Unsetenv(testEnv)
-		assertNoError(t, err)
-		assertEquals(t, gotString.GetDuration("a.b"), gotEnv.GetDuration("a.b"))
-		assertEquals(t, gotString.GetInt("a.c.d"), gotEnv.GetInt("a.c.d"))
-	})
 
 	t.Run("resolve to the static value if substitution path does not exist and environment variable is not set and default value was not provided", func(t *testing.T) {
 		defaultValue := String("default")
