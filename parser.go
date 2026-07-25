@@ -117,7 +117,7 @@ func (p *parser) advance() {
 	var builder strings.Builder
 
 	for p.currentRune == '\t' || p.currentRune == ' ' {
-		builder.WriteString(scanner.TokenString(p.currentRune))
+		builder.WriteRune(p.currentRune)
 		p.currentRune = p.scanner.Scan()
 	}
 
@@ -133,7 +133,7 @@ func resolveSubstitutions(root Object, valueOptional ...Value) error {
 	}
 
 	if valueOptional == nil {
-		removeUnresolved(root)
+		normalize(root)
 	}
 
 	return nil
@@ -257,14 +257,15 @@ func processSubstitutionType(root Object, substitution *Substitution, visitedPat
 	return nil, nil
 }
 
-// removeUnresolved removes the values of the unresolved optional substitutions
+// normalize removes the values of the unresolved optional substitutions
 // (fields, array elements and concatenation parts whose value is an undefined ${?path})
-// from the configuration tree, as the hocon spec requires them to be omitted
-func removeUnresolved(value Value) Value {
+// from the configuration tree, as the hocon spec requires them to be omitted, and
+// flattens the remaining string value concatenations into single String values
+func normalize(value Value) Value {
 	switch v := value.(type) {
 	case Object:
 		for key, element := range v {
-			if resolved := removeUnresolved(element); resolved == nil {
+			if resolved := normalize(element); resolved == nil {
 				delete(v, key)
 			} else {
 				v[key] = resolved
@@ -276,7 +277,7 @@ func removeUnresolved(value Value) Value {
 		containsNil := false
 
 		for i, element := range v {
-			if v[i] = removeUnresolved(element); v[i] == nil {
+			if v[i] = normalize(element); v[i] == nil {
 				containsNil = true
 			}
 		}
@@ -298,7 +299,7 @@ func removeUnresolved(value Value) Value {
 		result := make(concatenation, 0, len(v))
 
 		for _, element := range v {
-			resolved := removeUnresolved(element)
+			resolved := normalize(element)
 			if resolved == nil || resolved == String("") { // empty strings do not contribute to a concatenation
 				continue
 			}
@@ -312,11 +313,30 @@ func removeUnresolved(value Value) Value {
 		case 1:
 			return result[0]
 		default:
-			return result
+			return flattenStrings(result)
 		}
 	default:
 		return value
 	}
+}
+
+// flattenStrings joins the parts of the given concatenation into a single String
+// value, as the hocon spec defines the result of a string value concatenation to
+// be a string; returns the concatenation as it is if any of its parts is not a
+// simple value (e.g. an object or an array)
+func flattenStrings(concat concatenation) Value {
+	var builder strings.Builder
+
+	for _, element := range concat {
+		switch element.(type) {
+		case String, Int, Float32, Float64, Boolean, Duration, Null:
+			builder.WriteString(rawString(element))
+		default:
+			return concat
+		}
+	}
+
+	return String(builder.String())
 }
 
 func (p *parser) extractObject(isSubObject ...bool) (Object, error) {

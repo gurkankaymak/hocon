@@ -894,7 +894,7 @@ func TestResolveSubstitutions(t *testing.T) {
 	})
 }
 
-func TestRemoveUnresolved(t *testing.T) {
+func TestNormalize(t *testing.T) {
 	t.Run("remove the unresolved values from objects, arrays and concatenations", func(t *testing.T) {
 		object := Object{
 			"a": nil,
@@ -902,20 +902,38 @@ func TestRemoveUnresolved(t *testing.T) {
 			"c": concatenation{String("x"), String(""), nil},
 			"d": Object{"e": nil},
 		}
-		removeUnresolved(object)
+		normalize(object)
 		assertDeepEqual(t, object, Object{"b": Array{Int(1)}, "c": String("x"), "d": Object{}})
 	})
 
-	t.Run("keep the resolved values as they are", func(t *testing.T) {
-		object := Object{"a": Int(1), "b": Array{String("x")}, "c": concatenation{String("x"), String(" "), String("y")}}
-		removeUnresolved(object)
-		assertDeepEqual(t, object, Object{"a": Int(1), "b": Array{String("x")}, "c": concatenation{String("x"), String(" "), String("y")}})
+	t.Run("keep the resolved simple values as they are", func(t *testing.T) {
+		object := Object{"a": Int(1), "b": Array{String("x")}}
+		normalize(object)
+		assertDeepEqual(t, object, Object{"a": Int(1), "b": Array{String("x")}})
 	})
 
 	t.Run("remove the concatenation if all of its elements are removed", func(t *testing.T) {
 		object := Object{"a": concatenation{nil, nil}}
-		removeUnresolved(object)
+		normalize(object)
 		assertDeepEqual(t, object, Object{})
+	})
+
+	t.Run("flatten the string value concatenation into a single string", func(t *testing.T) {
+		object := Object{"a": concatenation{String("x"), String(" "), String("y")}}
+		normalize(object)
+		assertDeepEqual(t, object, Object{"a": String("x y")})
+	})
+
+	t.Run("flatten the concatenation of strings and simple values into a single string", func(t *testing.T) {
+		object := Object{"a": concatenation{String("port:"), String(" "), Int(8080), String(" "), Boolean(true)}}
+		normalize(object)
+		assertDeepEqual(t, object, Object{"a": String("port: 8080 true")})
+	})
+
+	t.Run("keep the concatenation as it is if it contains a non-simple value", func(t *testing.T) {
+		object := Object{"a": concatenation{Object{"x": Int(1)}, Object{"y": Int(2)}}}
+		normalize(object)
+		assertDeepEqual(t, object, Object{"a": concatenation{Object{"x": Int(1)}, Object{"y": Int(2)}}})
 	})
 }
 

@@ -76,7 +76,7 @@ func (c *Config) GetStringMapString(path string) map[string]string {
 
 	var m = make(map[string]string, len(object))
 	for k, v := range object {
-		m[k] = v.String()
+		m[k] = rawString(v)
 	}
 
 	return m
@@ -121,21 +121,21 @@ func (c *Config) GetStringSlice(path string) []string {
 	slice := make([]string, 0, len(arr))
 
 	for _, v := range arr {
-		slice = append(slice, v.String())
+		slice = append(slice, rawString(v))
 	}
 
 	return slice
 }
 
-// GetString method finds the value at the given path and returns it as a String
-// returns empty string if the value is not found
+// GetString method finds the value at the given path and returns its raw string content
+// (without the hocon quoting), returns empty string if the value is not found
 func (c *Config) GetString(path string) string {
 	value := c.Get(path)
 	if value == nil {
 		return ""
 	}
 
-	return value.String()
+	return rawString(value)
 }
 
 // GetInt method finds the value at the given path and returns it as an Int, returns zero if the value is not found
@@ -300,6 +300,16 @@ func (s String) String() string {
 }
 
 func (s String) isConcatenable() bool { return true }
+
+// rawString returns the content of the given value as a raw string, without the
+// quoting that the String method applies when rendering a value as hocon
+func rawString(value Value) string {
+	if str, ok := value.(String); ok {
+		return string(str)
+	}
+
+	return value.String()
+}
 
 // valueWithAlternative represents a value with Substitution which might override the original value
 type valueWithAlternative struct {

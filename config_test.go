@@ -74,6 +74,12 @@ func TestGetStringMapString(t *testing.T) {
 			t.Errorf("expected: nil, got: %v", got)
 		}
 	})
+
+	t.Run("return the raw string values without adding quotes", func(t *testing.T) {
+		conf, err := ParseString(`a = { b = "x y", c = 1 }`)
+		assertNoError(t, err)
+		assertDeepEqual(t, conf.GetStringMapString("a"), map[string]string{"b": "x y", "c": "1"})
+	})
 }
 
 func TestGetArray(t *testing.T) {
@@ -135,6 +141,12 @@ func TestGetStringSlice(t *testing.T) {
 		got := config.GetStringSlice("b")
 		assertDeepEqual(t, got, []string{"1", "c"})
 	})
+
+	t.Run("return the raw strings without adding quotes", func(t *testing.T) {
+		conf, err := ParseString(`a = ["x y", "http://z"]`)
+		assertNoError(t, err)
+		assertDeepEqual(t, conf.GetStringSlice("a"), []string{"x y", "http://z"})
+	})
 }
 
 func TestGetString(t *testing.T) {
@@ -150,6 +162,37 @@ func TestGetString(t *testing.T) {
 
 	t.Run("convert to string and return the value if it is not a string", func(t *testing.T) {
 		assertEquals(t, config.GetString("c"), "2")
+	})
+
+	t.Run("return the quoted strings without adding extra quotes", func(t *testing.T) {
+		conf, err := ParseString(`url = "https://example.com/path?q=1"`)
+		assertNoError(t, err)
+		assertEquals(t, conf.GetString("url"), "https://example.com/path?q=1")
+	})
+
+	t.Run("return the unquoted strings containing special characters without adding quotes", func(t *testing.T) {
+		conf, err := ParseString("name = foo-bar")
+		assertNoError(t, err)
+		assertEquals(t, conf.GetString("name"), "foo-bar")
+	})
+
+	t.Run("keep the hocon quoting in the rendered configuration while returning the raw string", func(t *testing.T) {
+		conf, err := ParseString(`greeting = "hello world"`)
+		assertNoError(t, err)
+		assertEquals(t, conf.GetString("greeting"), "hello world")
+		assertEquals(t, conf.String(), `{greeting:"hello world"}`)
+	})
+
+	t.Run("return the flattened string of a string value concatenation", func(t *testing.T) {
+		conf, err := ParseString(`greeting = "hello" "world"`)
+		assertNoError(t, err)
+		assertEquals(t, conf.GetString("greeting"), "hello world")
+	})
+
+	t.Run("return the flattened string of a concatenation with substitutions", func(t *testing.T) {
+		conf, err := ParseString("host = localhost\nurl = \"https://\"${host}\"/api\"")
+		assertNoError(t, err)
+		assertEquals(t, conf.GetString("url"), "https://localhost/api")
 	})
 }
 
