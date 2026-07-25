@@ -388,7 +388,16 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 			break
 		}
 
-		key := strings.Trim(p.scanner.TokenText(), `"`)
+		key := p.scanner.TokenText()
+		if !strings.HasPrefix(key, `"`) && key != dotToken {
+			// glue the tokens that immediately follow, as the scanner splits keys with numeric path segments like ".2g" into multiple tokens
+			for isAdjacentKeyRune(p.scanner.Peek()) {
+				p.advance()
+				key += p.scanner.TokenText()
+			}
+		}
+
+		key = strings.Trim(key, `"`)
 		if strings.HasPrefix(key, dotToken) && key != dotToken {
 			key = strings.TrimPrefix(key, dotToken)
 		}
@@ -798,6 +807,11 @@ func (p *parser) extractValue() (Value, error) {
 
 	switch p.currentRune {
 	case scanner.Int:
+		if glued := p.glueAdjacent(token); glued != token {
+			p.advance()
+			return numberLedValue(glued), nil
+		}
+
 		value, err := strconv.Atoi(token)
 		if err != nil {
 			return nil, err
@@ -811,6 +825,11 @@ func (p *parser) extractValue() (Value, error) {
 
 		return Int(value), nil
 	case scanner.Float:
+		if glued := p.glueAdjacent(token); glued != token {
+			p.advance()
+			return numberLedValue(glued), nil
+		}
+
 		value, err := strconv.ParseFloat(token, 64)
 		if err != nil {
 			if isUnquotedString(token) {
@@ -824,7 +843,7 @@ func (p *parser) extractValue() (Value, error) {
 		durationUnit := p.extractDurationUnit()
 		if durationUnit != 0 {
 			p.advance()
-			return Duration(time.Duration(value) * durationUnit), nil
+			return Duration(time.Duration(value * float64(durationUnit))), nil
 		}
 
 		return Float64(value), nil
@@ -837,6 +856,8 @@ func (p *parser) extractValue() (Value, error) {
 
 		return String(strings.Trim(token, `"`)), nil
 	case scanner.Ident:
+		token = p.glueAdjacent(token)
+
 		switch {
 		case token == string(null):
 			p.advance()
@@ -870,25 +891,105 @@ func (p *parser) extractDurationUnit() time.Duration {
 	p.advance()
 
 	if nextCharacter != '\n' && p.scanner.Line == p.scanner.Pos().Line {
-		switch p.scanner.TokenText() {
-		case "ns", "nano", "nanos", "nanosecond", "nanoseconds":
-			return time.Nanosecond
-		case "us", "micro", "micros", "microsecond", "microseconds":
-			return time.Microsecond
-		case "ms", "milli", "millis", "millisecond", "milliseconds":
-			return time.Millisecond
-		case "s", "second", "seconds":
-			return time.Second
-		case "m", "minute", "minutes":
-			return time.Minute
-		case "h", "hour", "hours":
-			return time.Hour
-		case "d", "day", "days":
-			return time.Hour * 24
-		}
+		return durationUnitOf(p.scanner.TokenText())
 	}
 
 	return time.Duration(0)
+}
+
+func durationUnitOf(text string) time.Duration {
+	switch text {
+	case "ns", "nano", "nanos", "nanosecond", "nanoseconds":
+		return time.Nanosecond
+	case "us", "micro", "micros", "microsecond", "microseconds":
+		return time.Microsecond
+	case "ms", "milli", "millis", "millisecond", "milliseconds":
+		return time.Millisecond
+	case "s", "second", "seconds":
+		return time.Second
+	case "m", "minute", "minutes":
+		return time.Minute
+	case "h", "hour", "hours":
+		return time.Hour
+	case "d", "day", "days":
+		return time.Hour * 24
+	}
+
+	return time.Duration(0)
+}
+
+// glueAdjacent glues the tokens that immediately follow the given token (without
+// any whitespace in between) into a single unquoted string run, as the scanner
+// splits values like "2.2.0" or "bar10.0" into multiple tokens
+func (p *parser) glueAdjacent(token string) string {
+	if !isAdjacentValueRune(p.scanner.Peek()) {
+		return token
+	}
+
+	var builder strings.Builder
+
+	builder.WriteString(token)
+
+	for isAdjacentValueRune(p.scanner.Peek()) {
+		p.advance()
+		builder.WriteString(p.scanner.TokenText())
+	}
+
+	return builder.String()
+}
+
+// numberLedValue converts the given unquoted string run that starts with a number
+// into an Int, Float64 or Duration if the whole text forms one, otherwise returns
+// it as a String (e.g. version numbers like "2.2.0" or "1.2.3-SNAPSHOT")
+func numberLedValue(text string) Value {
+	if value, err := strconv.Atoi(text); err == nil {
+		return Int(value)
+	}
+
+	if value, err := strconv.ParseFloat(text, 64); err == nil {
+		return Float64(value)
+	}
+
+	if duration, ok := durationOf(text); ok {
+		return duration
+	}
+
+	return String(text)
+}
+
+// durationOf converts texts like "10s" or "1.5hours" to a Duration
+func durationOf(text string) (Duration, bool) {
+	unitStart := len(text)
+	for unitStart > 0 && unicode.IsLetter(rune(text[unitStart-1])) {
+		unitStart--
+	}
+
+	if unitStart == 0 || unitStart == len(text) {
+		return 0, false
+	}
+
+	unit := durationUnitOf(text[unitStart:])
+	if unit == 0 {
+		return 0, false
+	}
+
+	if value, err := strconv.Atoi(text[:unitStart]); err == nil {
+		return Duration(time.Duration(value) * unit), true
+	}
+
+	if value, err := strconv.ParseFloat(text[:unitStart], 64); err == nil {
+		return Duration(time.Duration(value * float64(unit))), true
+	}
+
+	return 0, false
+}
+
+func isAdjacentValueRune(ch rune) bool {
+	return ch == '.' || isAdjacentKeyRune(ch)
+}
+
+func isAdjacentKeyRune(ch rune) bool {
+	return ch == '-' || ch == '_' || unicode.IsLetter(ch) || unicode.IsDigit(ch)
 }
 
 func (p *parser) extractSubstitution() (*Substitution, error) {

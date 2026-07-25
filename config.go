@@ -604,16 +604,16 @@ type Float32 float32
 
 // Type Number
 func (f Float32) Type() Type           { return NumberType }
-func (f Float32) String() string       { return strconv.FormatFloat(float64(f), 'e', -1, 32) }
-func (f Float32) isConcatenable() bool { return false }
+func (f Float32) String() string       { return strconv.FormatFloat(float64(f), 'g', -1, 32) }
+func (f Float32) isConcatenable() bool { return true }
 
 // Float64 represents a Float64 value
 type Float64 float64
 
 // Type Number
 func (f Float64) Type() Type           { return NumberType }
-func (f Float64) String() string       { return strconv.FormatFloat(float64(f), 'e', -1, 64) }
-func (f Float64) isConcatenable() bool { return false }
+func (f Float64) String() string       { return strconv.FormatFloat(float64(f), 'g', -1, 64) }
+func (f Float64) isConcatenable() bool { return true }
 
 // Boolean represents bool value
 type Boolean bool

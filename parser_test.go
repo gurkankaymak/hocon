@@ -175,7 +175,7 @@ func TestExtractObject(t *testing.T) {
 		parser.advance()
 		got, err := parser.extractObject()
 		assertNoError(t, err)
-		assertDeepEqual(t, got, Object{"x": Object{"a": Object{"b": concatenation{Int(10), String(""), String("cc")}}}})
+		assertDeepEqual(t, got, Object{"x": Object{"a": Object{"b": String("10cc")}}})
 	})
 
 	t.Run("skip the comments inside objects", func(t *testing.T) {
@@ -586,7 +586,7 @@ func TestExtractObject(t *testing.T) {
 		parser.advance()
 		got, err := parser.extractObject()
 		assertNoError(t, err)
-		assertDeepEqual(t, got, Object{"uuid": concatenation{String("123e4567"), String(""), String("-e89b-12d3-a456-426614174000")}})
+		assertDeepEqual(t, got, Object{"uuid": String("123e4567-e89b-12d3-a456-426614174000")})
 	})
 
 	t.Run("extract the object that contains an array with substitution and concatenation", func(t *testing.T) {
@@ -1144,6 +1144,78 @@ func TestKeysWithoutValue(t *testing.T) {
 	})
 }
 
+func TestUnquotedValuesAndKeysWithDots(t *testing.T) {
+	t.Run("parse the unquoted values and keys that contain dots", func(t *testing.T) {
+		got, err := ParseString("key1 {\n  a = \"a\"\n  b = 2.2.0\n  c-f1.2g = \"ok\"\n}")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"key1": Object{
+			"a":    String("a"),
+			"b":    String("2.2.0"),
+			"c-f1": Object{"2g": String("ok")},
+		}}})
+		assertEquals(t, got.GetString("key1.c-f1.2g"), "ok")
+	})
+
+	t.Run("parse the unquoted string that starts with letters and ends with a dotted number", func(t *testing.T) {
+		got, err := ParseString("{foo:bar10.0}")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"foo": String("bar10.0")}})
+	})
+
+	t.Run("parse the version strings as unquoted strings", func(t *testing.T) {
+		got, err := ParseString("v = 1.2.3-SNAPSHOT\nw = 0.13.7_alpha")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"v": String("1.2.3-SNAPSHOT"), "w": String("0.13.7_alpha")}})
+	})
+
+	t.Run("keep parsing the valid numbers as numbers", func(t *testing.T) {
+		got, err := ParseString("a = 2.2\nb = 10")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": Float64(2.2), "b": Int(10)}})
+	})
+
+	t.Run("parse the durations that are adjacent to their units", func(t *testing.T) {
+		got, err := ParseString("a = 10s\nb = 5.5s\nc = 2hours")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{
+			"a": Duration(10 * time.Second),
+			"b": Duration(5500 * time.Millisecond),
+			"c": Duration(2 * time.Hour),
+		}})
+	})
+
+	t.Run("parse the float durations with space separated units without truncating", func(t *testing.T) {
+		got, err := ParseString("a = 0.5 second")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": Duration(500 * time.Millisecond)}})
+	})
+
+	t.Run("concatenate the float values with the unquoted strings", func(t *testing.T) {
+		got, err := ParseString("a = 1.5 foo")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": String("1.5 foo")}})
+	})
+
+	t.Run("render the float values in the shortest exact form", func(t *testing.T) {
+		got, err := ParseString("pi = 3.14")
+		assertNoError(t, err)
+		assertEquals(t, got.GetString("pi"), "3.14")
+		assertEquals(t, got.String(), "{pi:3.14}")
+	})
+
+	t.Run("parse the unquoted values that contain dots and slashes", func(t *testing.T) {
+		got, err := ParseString("host = example.com\nfile = /etc/app.conf")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"host": String("example.com"), "file": String("/etc/app.conf")}})
+	})
+
+	t.Run("return a leadingPeriodError if an alphabetic key starts with a period", func(t *testing.T) {
+		got, err := ParseString("{.a:1}")
+		assertError(t, err, leadingPeriodError(1, 2))
+		assertNil(t, got)
+	})
+}
+
 func TestParsePlusEqualsValue(t *testing.T) {
 	t.Run("create an array that contains the value if the existingItems map does not contain a value with the given key", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a += 42"))
@@ -1406,7 +1478,7 @@ func TestExtractArray(t *testing.T) {
 		parser.advance()
 		got, err := parser.extractArray()
 		assertNoError(t, err)
-		assertDeepEqual(t, got, Array{concatenation{String("example"), String(""), String("."), String(""), String("com")}})
+		assertDeepEqual(t, got, Array{String("example.com")})
 	})
 
 	t.Run("return invalidArrayError if the closing parenthesis is missing", func(t *testing.T) {
@@ -1511,13 +1583,12 @@ func TestExtractValue(t *testing.T) {
 		assertEquals(t, got, Int(1))
 	})
 
-	t.Run("extract float value", func(t *testing.T) {
+	t.Run("extract float duration value", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a:1.5 seconds"))
 		advanceScanner(t, parser, "1.5")
 		got, err := parser.extractValue()
 		assertNoError(t, err)
-		expected := 1.5
-		assertEquals(t, got, Duration(time.Duration(expected)*time.Second))
+		assertEquals(t, got, Duration(1500*time.Millisecond))
 	})
 
 	t.Run("extract float value", func(t *testing.T) {
@@ -1533,7 +1604,7 @@ func TestExtractValue(t *testing.T) {
 		advanceScanner(t, parser, "123e4567")
 		got, err := parser.extractValue()
 		assertNoError(t, err)
-		assertEquals(t, got, String("123e4567"))
+		assertEquals(t, got, String("123e4567-e89b-12d3-a456-426614174000"))
 	})
 
 	t.Run("extract multi-line string", func(t *testing.T) {
