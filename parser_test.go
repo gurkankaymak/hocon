@@ -1015,6 +1015,86 @@ func TestOmitUnresolvedOptionalSubstitutions(t *testing.T) {
 	})
 }
 
+func TestComments(t *testing.T) {
+	t.Run("parse the object if a comment contains the '//' characters", func(t *testing.T) {
+		got, err := ParseString("key: {\n    # //\n    name: {\n        name: value\n    }\n}")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"key": Object{"name": Object{"name": String("value")}}}})
+	})
+
+	t.Run("parse all of the fields if a comment contains a go style block comment", func(t *testing.T) {
+		got, err := ParseString("a = 1\n# /* embedded comment */\nb = 2")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": Int(1), "b": Int(2)}})
+	})
+
+	t.Run("parse the lines starting with '//' as comments", func(t *testing.T) {
+		got, err := ParseString("a = 1\n// this is a comment\nb = 2")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": Int(1), "b": Int(2)}})
+	})
+
+	t.Run("parse the '//' comment at the end of a line", func(t *testing.T) {
+		got, err := ParseString("a = 1 // this is a comment\nb = 2")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": Int(1), "b": Int(2)}})
+	})
+
+	t.Run("parse the '//' comment at the first line", func(t *testing.T) {
+		got, err := ParseString("// this is a comment\na = 1")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": Int(1)}})
+	})
+
+	t.Run("parse the '//' comment adjacent to a value", func(t *testing.T) {
+		got, err := ParseString("a = 1//comment\nb = 2")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": Int(1), "b": Int(2)}})
+	})
+
+	t.Run("terminate the unquoted string at the '//' comment", func(t *testing.T) {
+		got, err := ParseString("a = foo // comment\nb = 2")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": String("foo"), "b": Int(2)}})
+	})
+
+	t.Run("parse the '//' comment inside an array", func(t *testing.T) {
+		got, err := ParseString("a = [1, // comment\n2]")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": Array{Int(1), Int(2)}}})
+	})
+
+	t.Run("parse the '//' comment before the closing parenthesis of an object", func(t *testing.T) {
+		got, err := ParseString("a { b = 1\n// comment\n}")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": Object{"b": Int(1)}}})
+	})
+
+	t.Run("keep the single '/' characters in unquoted strings", func(t *testing.T) {
+		got, err := ParseString("path = /usr/local/bin")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"path": String("/usr/local/bin")}})
+	})
+
+	t.Run("keep the '//' characters inside quoted strings", func(t *testing.T) {
+		got, err := ParseString(`url = "http://example.com" // comment`)
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"url": String("http://example.com")}})
+	})
+
+	t.Run("return an error for the go style block comments as they are not valid hocon comments", func(t *testing.T) {
+		got, err := ParseString("a = 1 /* not a comment */\nb = 2")
+		assertError(t, err, missingCommaError(1, 8))
+		assertNil(t, got)
+	})
+
+	t.Run("return an error if a '//' comment is inside a substitution", func(t *testing.T) {
+		got, err := ParseString("a = ${b // }")
+		assertError(t, err, invalidSubstitutionError("comments are not allowed inside substitutions", 1, 9))
+		assertNil(t, got)
+	})
+}
+
 func TestParsePlusEqualsValue(t *testing.T) {
 	t.Run("create an array that contains the value if the existingItems map does not contain a value with the given key", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a += 42"))

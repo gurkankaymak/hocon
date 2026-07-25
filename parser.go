@@ -55,8 +55,9 @@ func newFileParser(src *os.File) *parser {
 func newScanner(src io.Reader) *scanner.Scanner {
 	s := new(scanner.Scanner)
 	s.Init(src)
-	s.Whitespace ^= 1<<'\t' | 1<<' '            // do not skip tabs and spaces
-	s.Error = func(*scanner.Scanner, string) {} // do not print errors to stderr
+	s.Whitespace ^= 1<<'\t' | 1<<' '                       // do not skip tabs and spaces
+	s.Mode &^= scanner.ScanComments | scanner.SkipComments // do not treat the go comments ('//' and '/* */') as comments, hocon comments ('#' and '//') are handled by the parser
+	s.Error = func(*scanner.Scanner, string) {}            // do not print errors to stderr
 	s.IsIdentRune = func(ch rune, i int) bool {
 		return ch == '_' || ch == '-' || unicode.IsLetter(ch) || unicode.IsDigit(ch) && i > 0
 	}
@@ -360,7 +361,7 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 	lastRow := 0
 
 	for tok := p.scanner.Peek(); tok != scanner.EOF; tok = p.scanner.Peek() {
-		if p.scanner.TokenText() == commentToken {
+		if isComment(p.scanner.TokenText(), p.scanner.Peek()) {
 			p.consumeComment()
 			continue
 		}
@@ -487,7 +488,7 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 			return object, nil
 		}
 
-		for p.scanner.TokenText() == commentToken {
+		for isComment(p.scanner.TokenText(), p.scanner.Peek()) {
 			p.consumeComment()
 		}
 
@@ -716,7 +717,7 @@ func (p *parser) extractArray() (Array, error) {
 		}
 
 		token = p.scanner.TokenText()
-		if token == commentToken {
+		if isComment(token, p.scanner.Peek()) {
 			p.consumeComment()
 			token = p.scanner.TokenText()
 		}
@@ -754,7 +755,7 @@ func (p *parser) extractArray() (Array, error) {
 
 			token = p.scanner.TokenText()
 
-			if token == commentToken {
+			if isComment(token, p.scanner.Peek()) {
 				p.consumeComment()
 				token = p.scanner.TokenText()
 			}
@@ -782,7 +783,7 @@ func (p *parser) extractArray() (Array, error) {
 
 func (p *parser) extractValue() (Value, error) {
 	token := p.scanner.TokenText()
-	if token == commentToken {
+	if isComment(token, p.scanner.Peek()) {
 		p.consumeComment()
 		token = p.scanner.TokenText()
 	}
@@ -909,7 +910,7 @@ func (p *parser) extractSubstitution() (*Substitution, error) {
 	var previousToken string
 
 	for tok := p.scanner.Peek(); tok != scanner.EOF; p.scanner.Peek() {
-		if token == commentToken {
+		if isComment(token, p.scanner.Peek()) {
 			return nil, invalidSubstitutionError("comments are not allowed inside substitutions", p.scanner.Line, p.scanner.Column)
 		}
 
@@ -983,9 +984,10 @@ func (p *parser) extractMultiLineString() (String, error) {
 }
 
 func (p *parser) isTokenConcatenable(currentText string, peeked rune) bool {
-	return isSubstitution(currentText, peeked) ||
-		isUnquotedString(currentText) ||
-		(p.currentRune == scanner.String && !isMultiLineString(currentText, peeked))
+	return !isComment(currentText, peeked) &&
+		(isSubstitution(currentText, peeked) ||
+			isUnquotedString(currentText) ||
+			(p.currentRune == scanner.String && !isMultiLineString(currentText, peeked)))
 }
 
 func isBooleanString(token string) bool {
@@ -994,6 +996,10 @@ func isBooleanString(token string) bool {
 
 func isSubstitution(token string, peekedToken rune) bool {
 	return token == "$" && peekedToken == '{'
+}
+
+func isComment(token string, peekedToken rune) bool {
+	return token == commentToken || (token == "/" && peekedToken == '/')
 }
 
 func isSeparator(token string, peekedToken rune) bool {
