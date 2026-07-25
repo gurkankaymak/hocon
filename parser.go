@@ -360,7 +360,8 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 
 	lastRow := 0
 
-	for tok := p.scanner.Peek(); tok != scanner.EOF; tok = p.scanner.Peek() {
+	// the second condition processes the last token before the end of the file, e.g. a trailing key without a value
+	for tok := p.scanner.Peek(); tok != scanner.EOF || p.scanner.TokenText() != ""; tok = p.scanner.Peek() {
 		if isComment(p.scanner.TokenText(), p.scanner.Peek()) {
 			p.consumeComment()
 			continue
@@ -404,8 +405,9 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 		text := p.scanner.TokenText()
 
 		startsWithDot := strings.HasPrefix(text, dotToken) && text != dotToken
+		isNestedObjectPath := text == dotToken || text == objectStartToken || startsWithDot
 
-		if text == dotToken || text == objectStartToken || startsWithDot {
+		if isNestedObjectPath {
 			if text == dotToken {
 				p.advance() // skip "."
 
@@ -462,14 +464,20 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 
 			object[key] = value
 		case "+":
-			if p.scanner.Peek() == '=' {
-				p.advance()
-				p.advance()
+			if p.scanner.Peek() != '=' {
+				return nil, invalidKeyValueSeparatorError(key, text, p.scanner.Line, p.scanner.Column)
+			}
 
-				err := p.parsePlusEqualsValue(object, key)
-				if err != nil {
-					return nil, err
-				}
+			p.advance()
+			p.advance()
+
+			err := p.parsePlusEqualsValue(object, key)
+			if err != nil {
+				return nil, err
+			}
+		default:
+			if !isNestedObjectPath { // a key must be followed by a separator or an object
+				return nil, invalidKeyValueSeparatorError(key, text, p.scanner.Line, p.scanner.Column)
 			}
 		}
 
@@ -495,7 +503,7 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 		if p.scanner.Line == lastRow &&
 			p.scanner.TokenText() != commaToken &&
 			p.scanner.TokenText() != objectEndToken &&
-			p.scanner.Peek() != scanner.EOF {
+			p.scanner.TokenText() != "" {
 			return nil, missingCommaError(p.scanner.Line, p.scanner.Column)
 		}
 

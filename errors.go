@@ -61,6 +61,15 @@ func invalidKeyError(key string, line, column int) *ParseError {
 	return parseError("invalid key!", fmt.Sprintf("%q is a forbidden character in keys", key), line, column)
 }
 
+func invalidKeyValueSeparatorError(key, token string, line, column int) *ParseError {
+	got := fmt.Sprintf("%q", token)
+	if token == "" {
+		got = "end of file"
+	}
+
+	return parseError("invalid key-value separator!", fmt.Sprintf("expected ':', '=', '{' or '+=' after the key %q, got: %s", key, got), line, column)
+}
+
 func invalidValueError(message string, line, column int) *ParseError {
 	return parseError("invalid value!", message, line, column)
 }

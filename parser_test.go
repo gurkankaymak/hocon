@@ -63,8 +63,8 @@ func TestParse(t *testing.T) {
 	})
 
 	t.Run("return an invalidObjectError if the EOF is not reached after extractObject method returns", func(t *testing.T) {
-		parser := newParser(strings.NewReader("a:{b:1}bb"))
-		expectedError := invalidObjectError("invalid token bb", 1, 8)
+		parser := newParser(strings.NewReader("{a:1}bb"))
+		expectedError := invalidObjectError("invalid token bb", 1, 6)
 		got, err := parser.parse()
 		assertError(t, err, expectedError)
 		assertNil(t, got)
@@ -487,7 +487,7 @@ func TestExtractObject(t *testing.T) {
 	t.Run("return error if '=' does not exist after '+'", func(t *testing.T) {
 		parser := newParser(strings.NewReader("{a+1}"))
 		parser.advance()
-		expectedError := invalidKeyError("+", 1, 3)
+		expectedError := invalidKeyValueSeparatorError("a", "+", 1, 3)
 		got, err := parser.extractObject()
 		assertError(t, err, expectedError)
 		assertNil(t, got)
@@ -841,6 +841,7 @@ func TestResolveSubstitutions(t *testing.T) {
 
 	t.Run("extract valueWithAlternative value with string type", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a: stringValue, a:${?b}"))
+		parser.advance()
 		expected := Object{"a": &valueWithAlternative{
 			value:       String("stringValue"),
 			alternative: &Substitution{path: "b", optional: true},
@@ -852,6 +853,7 @@ func TestResolveSubstitutions(t *testing.T) {
 
 	t.Run("extract valueWithAlternative value with number type", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a: 1, a:${?b}"))
+		parser.advance()
 		expected := Object{"a": &valueWithAlternative{
 			value:       Int(1),
 			alternative: &Substitution{path: "b", optional: true},
@@ -863,6 +865,7 @@ func TestResolveSubstitutions(t *testing.T) {
 
 	t.Run("extract valueWithAlternative value with duration type", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a: 1s, a:${?b}"))
+		parser.advance()
 		expected := Object{"a": &valueWithAlternative{
 			value:       Duration(time.Second),
 			alternative: &Substitution{path: "b", optional: true},
@@ -874,6 +877,7 @@ func TestResolveSubstitutions(t *testing.T) {
 
 	t.Run("extract valueWithAlternative value with boolean type", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a: true, a:${?b}"))
+		parser.advance()
 		expected := Object{"a": &valueWithAlternative{
 			value:       Boolean(true),
 			alternative: &Substitution{path: "b", optional: true},
@@ -885,6 +889,7 @@ func TestResolveSubstitutions(t *testing.T) {
 
 	t.Run("extract valueWithAlternative value and overwrite alternatives", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a: static, a:${?b}"))
+		parser.advance()
 		expected := Object{
 			"a": &valueWithAlternative{value: String("static"), alternative: &Substitution{path: "b", optional: true}},
 		}
@@ -1095,6 +1100,50 @@ func TestComments(t *testing.T) {
 	})
 }
 
+func TestKeysWithoutValue(t *testing.T) {
+	t.Run("return an error if a key is followed by a comma instead of a separator", func(t *testing.T) {
+		got, err := ParseString("id,is_enabled\n12,TRUE\n")
+		assertError(t, err, invalidKeyValueSeparatorError("id", ",", 1, 3))
+		assertNil(t, got)
+	})
+
+	t.Run("return the same error with and without a trailing newline at the end of the file", func(t *testing.T) {
+		_, errWithNewline := ParseString("id,is_enabled\n12,TRUE\n")
+		_, errWithoutNewline := ParseString("id,is_enabled\n12,TRUE")
+		assertError(t, errWithoutNewline, errWithNewline)
+	})
+
+	t.Run("return an error if a key is followed by a value without a separator", func(t *testing.T) {
+		got, err := ParseString("a 1")
+		assertError(t, err, invalidKeyValueSeparatorError("a", "1", 1, 3))
+		assertNil(t, got)
+	})
+
+	t.Run("return an error if an object contains a key without a value", func(t *testing.T) {
+		got, err := ParseString("{a}")
+		assertError(t, err, invalidKeyValueSeparatorError("a", "}", 1, 3))
+		assertNil(t, got)
+	})
+
+	t.Run("return an error if a key at the end of the file has no value", func(t *testing.T) {
+		got, err := ParseString("a = 1\nb")
+		assertError(t, err, invalidKeyValueSeparatorError("b", "", 2, 2))
+		assertNil(t, got)
+	})
+
+	t.Run("return an error if a key is followed by a '+' without a '='", func(t *testing.T) {
+		got, err := ParseString("a + 1")
+		assertError(t, err, invalidKeyValueSeparatorError("a", "+", 1, 3))
+		assertNil(t, got)
+	})
+
+	t.Run("return a missingCommaError if a value is followed by a non-concatenable value at the end of the file", func(t *testing.T) {
+		got, err := ParseString("a:{b:1}bb")
+		assertError(t, err, missingCommaError(1, 8))
+		assertNil(t, got)
+	})
+}
+
 func TestParsePlusEqualsValue(t *testing.T) {
 	t.Run("create an array that contains the value if the existingItems map does not contain a value with the given key", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a += 42"))
@@ -1128,7 +1177,7 @@ func TestParsePlusEqualsValue(t *testing.T) {
 		advanceScanner(t, parser, "{")
 		existingItems := Object{"a": Array{Int(5)}}
 		err := parser.parsePlusEqualsValue(existingItems, "a")
-		expectedError := invalidObjectError("parenthesis do not match", 1, 15)
+		expectedError := invalidKeyValueSeparatorError("42", "", 1, 17)
 		assertError(t, err, expectedError)
 	})
 
