@@ -2,7 +2,7 @@
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/gurkankaymak/hocon)](https://goreportcard.com/report/github.com/gurkankaymak/hocon)
 [![codecov](https://codecov.io/gh/gurkankaymak/hocon/branch/master/graph/badge.svg)](https://codecov.io/gh/gurkankaymak/hocon)
-[![Build Status](https://travis-ci.org/gurkankaymak/hocon.svg?branch=master)](https://travis-ci.org/gurkankaymak/hocon)
+[![Build Status](https://github.com/gurkankaymak/hocon/actions/workflows/ci.yml/badge.svg)](https://github.com/gurkankaymak/hocon/actions/workflows/ci.yml)
 [![GoDoc](https://godoc.org/github.com/gurkankaymak/hocon?status.svg)](https://godoc.org/github.com/gurkankaymak/hocon)
 [![Mentioned in Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go)
 

@@ -1,0 +1,36 @@
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        go: ['1.17.x', 'stable']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+
+      - name: gofmt
+        if: matrix.go == 'stable'
+        run: test -z "$(gofmt -l .)"
+
+      - name: vet
+        run: go vet ./...
+
+      - name: test
+        run: go test -race -coverprofile=coverage.txt -covermode=atomic ./...
+
+      - name: upload coverage
+        if: matrix.go == 'stable'
+        uses: codecov/codecov-action@v4
+        continue-on-error: true
+        with:
+          files: coverage.txt
