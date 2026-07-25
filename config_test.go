@@ -55,10 +55,9 @@ func TestGetConfig(t *testing.T) {
 }
 
 func TestGetStringMap(t *testing.T) {
-	object := Object{"b": Int(1)}
-	config := &Config{Object{"a": object}}
-	got := config.GetObject("a")
-	assertDeepEqual(t, got, object)
+	config := &Config{Object{"a": Object{"b": Int(1)}}}
+	got := config.GetStringMap("a")
+	assertDeepEqual(t, got, map[string]Value{"b": Int(1)})
 }
 
 func TestGetStringMapString(t *testing.T) {
