@@ -1349,7 +1349,7 @@ func TestValidateIncludeValue(t *testing.T) {
 	t.Run("return the include token containing the path in classpath(...) with quotes removed and required as 'false'", func(t *testing.T) {
 		parser := newParser(strings.NewReader(`include classpath("abc.conf")`))
 		advanceScanner(t, parser, "classpath")
-		expected := &include{path: "abc.conf", required: false}
+		expected := &include{path: "abc.conf", classpath: true, required: false}
 		got, err := parser.validateIncludeValue()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, expected)
@@ -1385,7 +1385,7 @@ func TestValidateIncludeValue(t *testing.T) {
 	t.Run("return the include token containing the path in required(classpath(...)) with quotes removed and required as 'true'", func(t *testing.T) {
 		parser := newParser(strings.NewReader(`include required(classpath("abc.conf"))`))
 		advanceScanner(t, parser, "required")
-		expected := &include{path: "abc.conf", required: true}
+		expected := &include{path: "abc.conf", classpath: true, required: true}
 		got, err := parser.validateIncludeValue()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, expected)
@@ -1434,6 +1434,37 @@ func TestParseIncludedResource(t *testing.T) {
 		got, err := parser.parseIncludedResource()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, Object{"a": Int(1), "x": Int(7), "y": String("foo")})
+	})
+
+	t.Run("include the .json and .conf versions of the file if the include path has no extension", func(t *testing.T) {
+		parser := newParser(strings.NewReader(`include "testdata/nested/noext"`))
+		advanceScanner(t, parser, `"testdata/nested/noext"`)
+		got, err := parser.parseIncludedResource()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, Object{"from-json": Int(1), "from-conf": Int(2), "priority": String("conf")})
+	})
+
+	t.Run("return an empty object if no version of the extensionless file exists and the include token is not required", func(t *testing.T) {
+		parser := newParser(strings.NewReader(`include "nonExistBase"`))
+		advanceScanner(t, parser, `"nonExistBase"`)
+		got, err := parser.parseIncludedResource()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, Object{})
+	})
+
+	t.Run("return an error if no version of the extensionless file exists but the include token is required", func(t *testing.T) {
+		parser := newParser(strings.NewReader(`include required("nonExistBase")`))
+		advanceScanner(t, parser, "required")
+		expectedError := fmt.Errorf("could not parse resource: %w", &os.PathError{Op: "open", Path: "nonExistBase", Err: errors.New("no such file or directory")})
+		object, err := parser.parseIncludedResource()
+		assertError(t, err, expectedError)
+		assertNil(t, object)
+	})
+
+	t.Run("resolve the classpath includes against the directory of the top-level parsed file", func(t *testing.T) {
+		got, err := ParseResource("testdata/cp-root.conf")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"root-value": Int(1), "mid-value": Int(2), "leaf-value": Int(3)}})
 	})
 }
 

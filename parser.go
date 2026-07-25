@@ -37,19 +37,20 @@ type parser struct {
 	currentRune             rune
 	lastConsumedWhitespaces string // used in concatenation not to lose whitespaces between values
 	filepath                string
+	rootDir                 string // directory of the top-level parsed file, the classpath() includes are resolved against it
 }
 
 func newParser(src io.Reader) *parser {
 	s := newScanner(src)
 	currWd := "."
 
-	return &parser{scanner: s, filepath: currWd}
+	return &parser{scanner: s, filepath: currWd, rootDir: currWd}
 }
 
 func newFileParser(src *os.File) *parser {
 	s := newScanner(src)
 
-	return &parser{scanner: s, filepath: src.Name()}
+	return &parser{scanner: s, filepath: src.Name(), rootDir: path.Dir(src.Name())}
 }
 
 func newScanner(src io.Reader) *scanner.Scanner {
@@ -579,7 +580,7 @@ func (p *parser) parsePlusEqualsValue(existingObject Object, key string) error {
 }
 
 func (p *parser) validateIncludeValue() (*include, error) {
-	var required bool
+	var required, classpath bool
 
 	token := p.scanner.TokenText()
 	if token == "required" {
@@ -596,6 +597,8 @@ func (p *parser) validateIncludeValue() (*include, error) {
 	}
 
 	if token == "file" || token == "classpath" {
+		classpath = token == "classpath"
+
 		p.advance()
 
 		if p.scanner.TokenText() != "(" {
@@ -626,27 +629,69 @@ func (p *parser) validateIncludeValue() (*include, error) {
 		return nil, invalidValueError("expected quoted string, optionally wrapped in 'file(...)' or 'classpath(...)'", p.scanner.Line, p.scanner.Column)
 	}
 
-	return &include{path: token[1 : tokenLength-1], required: required}, nil // remove double quotes
+	return &include{path: token[1 : tokenLength-1], classpath: classpath, required: required}, nil // remove double quotes
 }
 
-func (p *parser) parseIncludedResource() (includeObject Object, err error) {
+func (p *parser) parseIncludedResource() (Object, error) {
 	includeToken, err := p.validateIncludeValue()
 	if err != nil {
 		return nil, err
 	}
 
-	parsedFileParentDir := path.Dir(p.filepath)
-	includePath := path.Join(parsedFileParentDir, includeToken.path)
-	file, err := os.Open(includePath)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) && !includeToken.required {
-			return Object{}, nil
-		}
-
-		return nil, fmt.Errorf("could not parse resource: %w", err)
+	baseDir := path.Dir(p.filepath)
+	if includeToken.classpath {
+		// the classpath() includes are resolved against the directory of the top-level parsed file
+		// (as the go equivalent of the java classpath root) instead of the directory of the including file
+		baseDir = p.rootDir
 	}
 
-	includeParser := newFileParser(file)
+	includePath := path.Join(baseDir, includeToken.path)
+
+	includePaths := []string{includePath}
+	if path.Ext(includePath) == "" {
+		// an include without a file extension also includes the .json and .conf versions of the file, the values of the .conf version override the .json ones
+		includePaths = append(includePaths, includePath+".json", includePath+".conf")
+	}
+
+	includedObject := Object{}
+	found := false
+
+	var notExistErr error
+
+	for _, includePath := range includePaths {
+		object, err := p.parseIncludedFile(includePath)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				if notExistErr == nil {
+					notExistErr = err
+				}
+
+				continue
+			}
+
+			return nil, err
+		}
+
+		found = true
+
+		mergeObjects(includedObject, object)
+	}
+
+	if !found && includeToken.required {
+		return nil, notExistErr
+	}
+
+	return includedObject, nil
+}
+
+// parseIncludedFile parses the file at the given path into an Object, inheriting the
+// root directory of the current parser, the returned error wraps os.ErrNotExist if
+// the file does not exist
+func (p *parser) parseIncludedFile(includePath string) (includedObject Object, err error) {
+	file, err := os.Open(includePath)
+	if err != nil {
+		return nil, fmt.Errorf("could not parse resource: %w", err)
+	}
 
 	defer func() {
 		if closingErr := file.Close(); closingErr != nil {
@@ -654,6 +699,8 @@ func (p *parser) parseIncludedResource() (includeObject Object, err error) {
 		}
 	}()
 
+	includeParser := newFileParser(file)
+	includeParser.rootDir = p.rootDir
 	includeParser.advance()
 
 	if includeParser.scanner.TokenText() == arrayStartToken {
@@ -1130,6 +1177,7 @@ func isMultiLineString(token string, peekedToken rune) bool {
 }
 
 type include struct {
-	path     string
-	required bool
+	path      string
+	classpath bool
+	required  bool
 }
