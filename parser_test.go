@@ -970,10 +970,30 @@ func TestNormalize(t *testing.T) {
 		assertDeepEqual(t, object, Object{"a": String("port: 8080 true")})
 	})
 
-	t.Run("keep the concatenation as it is if it contains a non-simple value", func(t *testing.T) {
-		object := Object{"a": concatenation{Object{"x": Int(1)}, Object{"y": Int(2)}}}
-		normalize(object)
-		assertDeepEqual(t, object, Object{"a": concatenation{Object{"x": Int(1)}, Object{"y": Int(2)}}})
+	t.Run("merge the concatenated objects into a single object", func(t *testing.T) {
+		object := Object{"a": concatenation{Object{"x": Int(1)}, String(" "), Object{"y": Int(2)}}}
+		_, err := normalize(object)
+		assertNoError(t, err)
+		assertDeepEqual(t, object, Object{"a": Object{"x": Int(1), "y": Int(2)}})
+	})
+
+	t.Run("append the concatenated arrays into a single array", func(t *testing.T) {
+		object := Object{"a": concatenation{Array{Int(1)}, String(" "), Array{Int(2), Int(3)}}}
+		_, err := normalize(object)
+		assertNoError(t, err)
+		assertDeepEqual(t, object, Object{"a": Array{Int(1), Int(2), Int(3)}})
+	})
+
+	t.Run("return an error if an object is concatenated with a non-object value", func(t *testing.T) {
+		object := Object{"a": concatenation{Object{"x": Int(1)}, String("y")}}
+		_, err := normalize(object)
+		assertError(t, err, invalidConcatenationError())
+	})
+
+	t.Run("return an error if an array is concatenated with a non-array value", func(t *testing.T) {
+		object := Object{"a": concatenation{Array{Int(1)}, String("y")}}
+		_, err := normalize(object)
+		assertError(t, err, invalidConcatenationError())
 	})
 }
 
@@ -1248,6 +1268,105 @@ func TestUnquotedValuesAndKeysWithDots(t *testing.T) {
 		got, err := ParseString("{.a:1}")
 		assertError(t, err, leadingPeriodError(1, 2))
 		assertNil(t, got)
+	})
+}
+
+func TestConcatenations(t *testing.T) {
+	t.Run("concatenate an array substitution with an array", func(t *testing.T) {
+		got, err := ParseString("b : [ 1, 2 ]\na : ${b} [ 3, 4 ]")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{
+			"b": Array{Int(1), Int(2)},
+			"a": Array{Int(1), Int(2), Int(3), Int(4)},
+		}})
+	})
+
+	t.Run("concatenate the arrays on the same line", func(t *testing.T) {
+		got, err := ParseString("a : [1, 2] [3, 4]")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": Array{Int(1), Int(2), Int(3), Int(4)}}})
+	})
+
+	t.Run("merge the objects concatenated on the same line", func(t *testing.T) {
+		got, err := ParseString("a : {x : 1} {y : 2}")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": Object{"x": Int(1), "y": Int(2)}}})
+	})
+
+	t.Run("override the values of the earlier objects if the concatenated objects contain the same key", func(t *testing.T) {
+		got, err := ParseString("a : {x : 1} {x : 2}")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": Object{"x": Int(2)}}})
+	})
+
+	t.Run("concatenate an object substitution with an object", func(t *testing.T) {
+		got, err := ParseString("base : { x : 1 }\na : ${base} {y : 2}")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{
+			"base": Object{"x": Int(1)},
+			"a":    Object{"x": Int(1), "y": Int(2)},
+		}})
+	})
+
+	t.Run("concatenate the arrays with a substitution in the middle", func(t *testing.T) {
+		got, err := ParseString("x : [2, 3]\na : [1] ${x} [4]")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{
+			"x": Array{Int(2), Int(3)},
+			"a": Array{Int(1), Int(2), Int(3), Int(4)},
+		}})
+	})
+
+	t.Run("concatenate two array substitutions", func(t *testing.T) {
+		got, err := ParseString("x : [1]\ny : [2]\na : ${x} ${y}")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{
+			"x": Array{Int(1)},
+			"y": Array{Int(2)},
+			"a": Array{Int(1), Int(2)},
+		}})
+	})
+
+	t.Run("concatenate the arrays inside an array", func(t *testing.T) {
+		got, err := ParseString("a : [ [1] [2], 3 ]")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": Array{Array{Int(1), Int(2)}, Int(3)}}})
+	})
+
+	t.Run("merge the concatenated objects inside an array", func(t *testing.T) {
+		got, err := ParseString("a : [ {x : 1} {y : 2} ]")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": Array{Object{"x": Int(1), "y": Int(2)}}}})
+	})
+
+	t.Run("return a missingCommaError if an array is followed by a simple value", func(t *testing.T) {
+		got, err := ParseString("a : [1] foo")
+		assertError(t, err, missingCommaError(1, 9))
+		assertNil(t, got)
+	})
+
+	t.Run("return a missingCommaError if a simple value is followed by an object", func(t *testing.T) {
+		got, err := ParseString("a : foo {x : 1}")
+		assertError(t, err, missingCommaError(1, 9))
+		assertNil(t, got)
+	})
+
+	t.Run("return an error if a substitution resolving to a string is concatenated with an array", func(t *testing.T) {
+		got, err := ParseString("s : foo\na : ${s} [1]")
+		assertError(t, err, invalidConcatenationError())
+		assertNil(t, got)
+	})
+
+	t.Run("return an error if a substitution resolving to an object is concatenated with an array", func(t *testing.T) {
+		got, err := ParseString("o : { x : 1 }\na : ${o} [1]")
+		assertError(t, err, invalidConcatenationError())
+		assertNil(t, got)
+	})
+
+	t.Run("keep the arrays on separate lines as separate values", func(t *testing.T) {
+		got, err := ParseString("a : [1, 2]\nb : [3, 4]")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": Array{Int(1), Int(2)}, "b": Array{Int(3), Int(4)}}})
 	})
 }
 

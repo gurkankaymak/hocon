@@ -91,5 +91,5 @@ func leadingCommaError(line, column int) *ParseError {
 }
 
 func invalidConcatenationError() *ParseError {
-	return parseError("invalid concatenation!", "objects cannot be concatenated with other types", 0, 0)
+	return parseError("invalid concatenation!", "arrays and objects cannot be concatenated with other types", 0, 0)
 }

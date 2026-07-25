@@ -163,7 +163,9 @@ func resolveSubstitutions(root Object, valueOptional ...Value) error {
 	}
 
 	if valueOptional == nil {
-		normalize(root)
+		if _, err := normalize(root); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -197,25 +199,6 @@ func resolveAcyclicSubstitutions(root Object, visitedPaths map[string]bool, valu
 			err := processSubstitution(root, value, visitedPaths, func(foundValue Value) { v[key] = foundValue })
 			if err != nil {
 				return err
-			}
-
-			if concatenationValue, ok := value.(concatenation); ok && concatenationValue.containsObject() {
-				merged := Object{}
-
-				for _, value := range concatenationValue {
-					if value == nil { // unresolved optional substitutions merge as an empty object
-						continue
-					}
-
-					object, ok := value.(Object)
-					if !ok {
-						return invalidConcatenationError()
-					}
-
-					mergeObjects(merged, object)
-				}
-
-				v[key] = merged
 			}
 		}
 	default:
@@ -290,30 +273,41 @@ func processSubstitutionType(root Object, substitution *Substitution, visitedPat
 // normalize removes the values of the unresolved optional substitutions
 // (fields, array elements and concatenation parts whose value is an undefined ${?path})
 // from the configuration tree, as the hocon spec requires them to be omitted, and
-// flattens the remaining string value concatenations into single String values
-func normalize(value Value) Value {
+// resolves the remaining concatenations: objects are merged, arrays are appended
+// and string values are flattened into single String values
+func normalize(value Value) (Value, error) {
 	switch v := value.(type) {
 	case Object:
 		for key, element := range v {
-			if resolved := normalize(element); resolved == nil {
+			resolved, err := normalize(element)
+			if err != nil {
+				return nil, err
+			}
+
+			if resolved == nil {
 				delete(v, key)
 			} else {
 				v[key] = resolved
 			}
 		}
 
-		return v
+		return v, nil
 	case Array:
 		containsNil := false
 
 		for i, element := range v {
-			if v[i] = normalize(element); v[i] == nil {
+			resolved, err := normalize(element)
+			if err != nil {
+				return nil, err
+			}
+
+			if v[i] = resolved; v[i] == nil {
 				containsNil = true
 			}
 		}
 
 		if !containsNil {
-			return v
+			return v, nil
 		}
 
 		result := make(Array, 0, len(v))
@@ -324,12 +318,16 @@ func normalize(value Value) Value {
 			}
 		}
 
-		return result
+		return result, nil
 	case concatenation:
 		result := make(concatenation, 0, len(v))
 
 		for _, element := range v {
-			resolved := normalize(element)
+			resolved, err := normalize(element)
+			if err != nil {
+				return nil, err
+			}
+
 			if resolved == nil || resolved == String("") { // empty strings do not contribute to a concatenation
 				continue
 			}
@@ -337,17 +335,69 @@ func normalize(value Value) Value {
 			result = append(result, resolved)
 		}
 
-		switch len(result) {
-		case 0:
-			return nil
-		case 1:
-			return result[0]
+		switch {
+		case len(result) == 0:
+			return nil, nil
+		case len(result) == 1:
+			return result[0], nil
+		case result.containsObject():
+			return mergeConcatenatedObjects(result)
+		case result.containsArray():
+			return concatenateArrays(result)
 		default:
-			return flattenStrings(result)
+			return flattenStrings(result), nil
 		}
 	default:
-		return value
+		return value, nil
 	}
+}
+
+// mergeConcatenatedObjects merges the objects of the given concatenation into a single
+// object (for the same keys the values of the later objects override the earlier ones),
+// the whitespaces between the concatenated values are ignored, any other value is invalid
+func mergeConcatenatedObjects(concat concatenation) (Value, error) {
+	merged := Object{}
+
+	for _, value := range concat {
+		if isWhitespaceString(value) {
+			continue
+		}
+
+		object, ok := value.(Object)
+		if !ok {
+			return nil, invalidConcatenationError()
+		}
+
+		mergeObjects(merged, object)
+	}
+
+	return merged, nil
+}
+
+// concatenateArrays appends the arrays of the given concatenation into a single array,
+// the whitespaces between the concatenated values are ignored, any other value is invalid
+func concatenateArrays(concat concatenation) (Value, error) {
+	result := Array{}
+
+	for _, value := range concat {
+		if isWhitespaceString(value) {
+			continue
+		}
+
+		array, ok := value.(Array)
+		if !ok {
+			return nil, invalidConcatenationError()
+		}
+
+		result = append(result, array...)
+	}
+
+	return result, nil
+}
+
+func isWhitespaceString(value Value) bool {
+	str, ok := value.(String)
+	return ok && strings.TrimSpace(string(str)) == ""
 }
 
 // flattenStrings joins the parts of the given concatenation into a single String
@@ -739,7 +789,7 @@ func (p *parser) parseIncludedFile(includePath string) (includedObject Object, e
 }
 
 func (p *parser) checkAndConcatenate(object Object, key string) (bool, error) {
-	if lastValue, ok := object[key]; ok && lastValue.isConcatenable() && p.isTokenConcatenable(p.scanner.TokenText(), p.scanner.Peek()) {
+	if lastValue, ok := object[key]; ok && p.canConcatenate(lastValue, p.scanner.TokenText(), p.scanner.Peek()) {
 		lastConsumedWhitespaces := p.lastConsumedWhitespaces
 
 		value, err := p.extractValue()
@@ -760,7 +810,7 @@ func (p *parser) checkAndConcatenate(object Object, key string) (bool, error) {
 }
 
 func (p *parser) checkConcatenation(lastValue Value) (Value, error) {
-	if lastValue.isConcatenable() && p.isTokenConcatenable(p.scanner.TokenText(), p.scanner.Peek()) {
+	if p.canConcatenate(lastValue, p.scanner.TokenText(), p.scanner.Peek()) {
 		lastConsumedWhitespaces := p.lastConsumedWhitespaces
 
 		value, err := p.extractValue()
@@ -1172,6 +1222,74 @@ func (p *parser) isTokenConcatenable(currentText string, peeked rune) bool {
 		(isSubstitution(currentText, peeked) ||
 			isUnquotedString(currentText) ||
 			(p.currentRune == scanner.String && !isMultiLineString(currentText, peeked)))
+}
+
+type concatenationCategory int
+
+const (
+	concatenatesNothing concatenationCategory = iota
+	concatenatesSimpleValues
+	concatenatesObjects
+	concatenatesArrays
+	concatenatesAnything
+)
+
+// concatenationCategoryOf returns the kind of values the given value can be concatenated
+// with, as the hocon spec defines: objects concatenate with objects, arrays with arrays and
+// simple values with simple values; substitutions concatenate with anything, as their type
+// is only known after the resolution
+func concatenationCategoryOf(value Value) concatenationCategory {
+	switch v := value.(type) {
+	case Object:
+		return concatenatesObjects
+	case Array:
+		return concatenatesArrays
+	case *Substitution:
+		return concatenatesAnything
+	case concatenation:
+		category := concatenatesAnything
+
+		for _, element := range v {
+			switch element := element.(type) {
+			case Object:
+				return concatenatesObjects
+			case Array:
+				return concatenatesArrays
+			case *Substitution:
+			case String:
+				if strings.TrimSpace(string(element)) != "" { // ignore the whitespaces between the concatenated values
+					category = concatenatesSimpleValues
+				}
+			default:
+				category = concatenatesSimpleValues
+			}
+		}
+
+		return category
+	default:
+		if value.isConcatenable() {
+			return concatenatesSimpleValues
+		}
+
+		return concatenatesNothing
+	}
+}
+
+// canConcatenate reports whether the given value can be concatenated with the value
+// that starts at the current token
+func (p *parser) canConcatenate(lastValue Value, token string, peeked rune) bool {
+	switch concatenationCategoryOf(lastValue) {
+	case concatenatesObjects:
+		return token == objectStartToken || isSubstitution(token, peeked)
+	case concatenatesArrays:
+		return token == arrayStartToken || isSubstitution(token, peeked)
+	case concatenatesSimpleValues:
+		return p.isTokenConcatenable(token, peeked)
+	case concatenatesAnything:
+		return token == objectStartToken || token == arrayStartToken || p.isTokenConcatenable(token, peeked)
+	default:
+		return false
+	}
 }
 
 func isBooleanString(token string) bool {

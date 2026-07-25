@@ -740,6 +740,16 @@ func (c concatenation) containsObject() bool {
 
 	return false
 }
+
+func (c concatenation) containsArray() bool {
+	for _, value := range c {
+		if value != nil && value.Type() == ArrayType {
+			return true
+		}
+	}
+
+	return false
+}
 func (c concatenation) String() string {
 	var builder strings.Builder
 
