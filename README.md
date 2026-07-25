@@ -111,3 +111,23 @@ func main() {
     fmt.Println("all configuration:", conf)
 }
 ```
+
+## Error handling
+
+The `Get*` methods return the zero value of the requested type if there is no value at the given path
+(and panic if the value exists but cannot be converted to the requested type).
+To fail fast on missing or invalid configuration instead, use the `HasPath` method or the `Get*E` variants
+(`GetStringE`, `GetIntE`, `GetBooleanE`, `GetObjectE` etc.), which return an error instead of a zero value or a panic:
+
+```go
+port, err := conf.GetIntE("server.port")
+if err != nil {
+    log.Fatal("invalid configuration: ", err) // fail at startup
+}
+
+if !conf.HasPath("server.host") {
+    log.Fatal("server.host is not set")
+}
+```
+
+The errors returned for missing paths can be identified with `errors.Is(err, hocon.ErrPathNotFound)`.

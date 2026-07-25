@@ -1,6 +1,7 @@
 package hocon
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -38,212 +39,367 @@ func (c *Config) GetRoot() Value {
 	return c.root
 }
 
-// GetObject method finds the value at the given path and returns it as an Object, returns nil if the value is not found
+// GetObject method finds the value at the given path and returns it as an Object
+// returns nil if the value is not found, panics if the value is not an object
 func (c *Config) GetObject(path string) Object {
-	value := c.Get(path)
-	if value == nil {
-		return nil
+	object, err := c.GetObjectE(path)
+	if err != nil && !errors.Is(err, ErrPathNotFound) {
+		panic(err)
 	}
 
-	return value.(Object)
+	return object
 }
 
-// GetConfig method finds the value at the given path and returns it as a Config, returns nil if the value is not found
-func (c *Config) GetConfig(path string) *Config {
-	value := c.GetObject(path)
+// GetObjectE method finds the value at the given path and returns it as an Object
+// returns an error if the value is not found or is not an object
+func (c *Config) GetObjectE(path string) (Object, error) {
+	value := c.Get(path)
 	if value == nil {
-		return nil
+		return nil, pathNotFoundError(path)
 	}
 
-	return value.ToConfig()
+	object, ok := value.(Object)
+	if !ok {
+		return nil, cannotParseError(value, "Object")
+	}
+
+	return object, nil
+}
+
+// GetConfig method finds the value at the given path and returns it as a Config
+// returns nil if the value is not found, panics if the value is not an object
+func (c *Config) GetConfig(path string) *Config {
+	config, err := c.GetConfigE(path)
+	if err != nil && !errors.Is(err, ErrPathNotFound) {
+		panic(err)
+	}
+
+	return config
+}
+
+// GetConfigE method finds the value at the given path and returns it as a Config
+// returns an error if the value is not found or is not an object
+func (c *Config) GetConfigE(path string) (*Config, error) {
+	object, err := c.GetObjectE(path)
+	if err != nil {
+		return nil, err
+	}
+
+	return object.ToConfig(), nil
 }
 
 // GetStringMap method finds the value at the given path and returns it as a map[string]Value
-// returns nil if the value is not found
+// returns nil if the value is not found, panics if the value is not an object
 func (c *Config) GetStringMap(path string) map[string]Value {
 	return c.GetObject(path)
 }
 
+// GetStringMapE method finds the value at the given path and returns it as a map[string]Value
+// returns an error if the value is not found or is not an object
+func (c *Config) GetStringMapE(path string) (map[string]Value, error) {
+	return c.GetObjectE(path)
+}
+
 // GetStringMapString method finds the value at the given path and returns it as a map[string]string
-// returns nil if the value is not found
+// returns nil if the value is not found, panics if the value is not an object
 func (c *Config) GetStringMapString(path string) map[string]string {
-	value := c.Get(path)
-	if value == nil {
-		return nil
+	stringMap, err := c.GetStringMapStringE(path)
+	if err != nil && !errors.Is(err, ErrPathNotFound) {
+		panic(err)
 	}
 
-	object := value.(Object)
+	return stringMap
+}
+
+// GetStringMapStringE method finds the value at the given path and returns it as a map[string]string
+// returns an error if the value is not found or is not an object
+func (c *Config) GetStringMapStringE(path string) (map[string]string, error) {
+	object, err := c.GetObjectE(path)
+	if err != nil {
+		return nil, err
+	}
 
 	var m = make(map[string]string, len(object))
 	for k, v := range object {
 		m[k] = rawString(v)
 	}
 
-	return m
+	return m, nil
 }
 
-// GetArray method finds the value at the given path and returns it as an Array, returns nil if the value is not found
+// GetArray method finds the value at the given path and returns it as an Array
+// returns nil if the value is not found, panics if the value is not an array
 func (c *Config) GetArray(path string) Array {
-	value := c.Get(path)
-	if value == nil {
-		return nil
+	array, err := c.GetArrayE(path)
+	if err != nil && !errors.Is(err, ErrPathNotFound) {
+		panic(err)
 	}
 
-	return value.(Array)
+	return array
 }
 
-// GetIntSlice method finds the value at the given path and returns it as []int, returns nil if the value is not found
-func (c *Config) GetIntSlice(path string) []int {
+// GetArrayE method finds the value at the given path and returns it as an Array
+// returns an error if the value is not found or is not an array
+func (c *Config) GetArrayE(path string) (Array, error) {
 	value := c.Get(path)
 	if value == nil {
-		return nil
+		return nil, pathNotFoundError(path)
 	}
 
-	arr := value.(Array)
-	slice := make([]int, 0, len(arr))
+	array, ok := value.(Array)
+	if !ok {
+		return nil, cannotParseError(value, "Array")
+	}
 
-	for _, v := range arr {
-		slice = append(slice, int(v.(Int)))
+	return array, nil
+}
+
+// GetIntSlice method finds the value at the given path and returns it as []int
+// returns nil if the value is not found, panics if the value is not an array of integers
+func (c *Config) GetIntSlice(path string) []int {
+	slice, err := c.GetIntSliceE(path)
+	if err != nil && !errors.Is(err, ErrPathNotFound) {
+		panic(err)
 	}
 
 	return slice
 }
 
-// GetStringSlice method finds the value at the given path and returns it as []string
-// returns nil if the value is not found
-func (c *Config) GetStringSlice(path string) []string {
-	value := c.Get(path)
-	if value == nil {
-		return nil
+// GetIntSliceE method finds the value at the given path and returns it as []int
+// returns an error if the value is not found or is not an array of integers
+func (c *Config) GetIntSliceE(path string) ([]int, error) {
+	arr, err := c.GetArrayE(path)
+	if err != nil {
+		return nil, err
 	}
 
-	arr := value.(Array)
+	slice := make([]int, 0, len(arr))
+
+	for _, v := range arr {
+		intValue, ok := v.(Int)
+		if !ok {
+			return nil, cannotParseError(v, "int")
+		}
+
+		slice = append(slice, int(intValue))
+	}
+
+	return slice, nil
+}
+
+// GetStringSlice method finds the value at the given path and returns it as []string
+// returns nil if the value is not found, panics if the value is not an array
+func (c *Config) GetStringSlice(path string) []string {
+	slice, err := c.GetStringSliceE(path)
+	if err != nil && !errors.Is(err, ErrPathNotFound) {
+		panic(err)
+	}
+
+	return slice
+}
+
+// GetStringSliceE method finds the value at the given path and returns it as []string
+// returns an error if the value is not found or is not an array
+func (c *Config) GetStringSliceE(path string) ([]string, error) {
+	arr, err := c.GetArrayE(path)
+	if err != nil {
+		return nil, err
+	}
+
 	slice := make([]string, 0, len(arr))
 
 	for _, v := range arr {
 		slice = append(slice, rawString(v))
 	}
 
-	return slice
+	return slice, nil
 }
 
 // GetString method finds the value at the given path and returns its raw string content
 // (without the hocon quoting), returns empty string if the value is not found
 func (c *Config) GetString(path string) string {
-	value := c.Get(path)
-	if value == nil {
-		return ""
-	}
-
-	return rawString(value)
+	str, _ := c.GetStringE(path)
+	return str
 }
 
-// GetInt method finds the value at the given path and returns it as an Int, returns zero if the value is not found
-func (c *Config) GetInt(path string) int {
+// GetStringE method finds the value at the given path and returns its raw string content
+// (without the hocon quoting), returns an error if the value is not found
+func (c *Config) GetStringE(path string) (string, error) {
 	value := c.Get(path)
 	if value == nil {
-		return 0
+		return "", pathNotFoundError(path)
+	}
+
+	return rawString(value), nil
+}
+
+// GetInt method finds the value at the given path and returns it as an int
+// returns zero if the value is not found, panics if the value cannot be converted to an int
+func (c *Config) GetInt(path string) int {
+	intValue, err := c.GetIntE(path)
+	if err != nil && !errors.Is(err, ErrPathNotFound) {
+		panic(err)
+	}
+
+	return intValue
+}
+
+// GetIntE method finds the value at the given path and returns it as an int
+// returns an error if the value is not found or cannot be converted to an int
+func (c *Config) GetIntE(path string) (int, error) {
+	value := c.Get(path)
+	if value == nil {
+		return 0, pathNotFoundError(path)
 	}
 
 	switch val := value.(type) {
 	case Int:
-		return int(val)
+		return int(val), nil
 	case String:
 		intValue, err := strconv.Atoi(string(val))
 		if err != nil {
-			panic(err)
+			return 0, err
 		}
 
-		return intValue
+		return intValue, nil
 	default:
-		panic("cannot parse value: " + val.String() + " to int!")
+		return 0, cannotParseError(val, "int")
 	}
 }
 
-// GetFloat32 method finds the value at the given path and returns it as a Float32
-// returns float32(0.0) if the value is not found
+// GetFloat32 method finds the value at the given path and returns it as a float32
+// returns float32(0.0) if the value is not found, panics if the value cannot be converted to a float32
 func (c *Config) GetFloat32(path string) float32 {
+	floatValue, err := c.GetFloat32E(path)
+	if err != nil && !errors.Is(err, ErrPathNotFound) {
+		panic(err)
+	}
+
+	return floatValue
+}
+
+// GetFloat32E method finds the value at the given path and returns it as a float32
+// returns an error if the value is not found or cannot be converted to a float32
+func (c *Config) GetFloat32E(path string) (float32, error) {
 	value := c.Get(path)
 	if value == nil {
-		return float32(0.0)
+		return 0, pathNotFoundError(path)
 	}
 
 	switch val := value.(type) {
 	case Float32:
-		return float32(val)
+		return float32(val), nil
 	case Float64:
-		return float32(val)
+		return float32(val), nil
 	case String:
 		floatValue, err := strconv.ParseFloat(string(val), 32)
 		if err != nil {
-			panic(err)
+			return 0, err
 		}
 
-		return float32(floatValue)
+		return float32(floatValue), nil
 	default:
-		panic("cannot parse value: " + val.String() + " to float32!")
+		return 0, cannotParseError(val, "float32")
 	}
 }
 
-// GetFloat64 method finds the value at the given path and returns it as a Float64
-// returns 0.0 if the value is not found
+// GetFloat64 method finds the value at the given path and returns it as a float64
+// returns 0.0 if the value is not found, panics if the value cannot be converted to a float64
 func (c *Config) GetFloat64(path string) float64 {
+	floatValue, err := c.GetFloat64E(path)
+	if err != nil && !errors.Is(err, ErrPathNotFound) {
+		panic(err)
+	}
+
+	return floatValue
+}
+
+// GetFloat64E method finds the value at the given path and returns it as a float64
+// returns an error if the value is not found or cannot be converted to a float64
+func (c *Config) GetFloat64E(path string) (float64, error) {
 	value := c.Get(path)
 	if value == nil {
-		return 0.0
+		return 0, pathNotFoundError(path)
 	}
 
 	switch val := value.(type) {
 	case Float64:
-		return float64(val)
+		return float64(val), nil
 	case Float32:
-		return float64(val)
+		return float64(val), nil
 	case String:
 		floatValue, err := strconv.ParseFloat(string(val), 64)
 		if err != nil {
-			panic(err)
+			return 0, err
 		}
 
-		return floatValue
+		return floatValue, nil
 	default:
-		panic("cannot parse value: " + val.String() + "to float64!")
+		return 0, cannotParseError(val, "float64")
 	}
 }
 
-// GetBoolean method finds the value at the given path and returns it as a Boolean
-// returns false if the value is not found
+// GetBoolean method finds the value at the given path and returns it as a bool
+// returns false if the value is not found, panics if the value cannot be converted to a bool
 func (c *Config) GetBoolean(path string) bool {
+	booleanValue, err := c.GetBooleanE(path)
+	if err != nil && !errors.Is(err, ErrPathNotFound) {
+		panic(err)
+	}
+
+	return booleanValue
+}
+
+// GetBooleanE method finds the value at the given path and returns it as a bool
+// returns an error if the value is not found or cannot be converted to a bool
+func (c *Config) GetBooleanE(path string) (bool, error) {
 	value := c.Get(path)
 	if value == nil {
-		return false
+		return false, pathNotFoundError(path)
 	}
 
 	switch val := value.(type) {
 	case Boolean:
-		return bool(val)
+		return bool(val), nil
 	case String:
 		switch val {
 		case "true", "yes", "on":
-			return true
+			return true, nil
 		case "false", "no", "off":
-			return false
+			return false, nil
 		default:
-			panic("cannot parse value: " + val + " to boolean!")
+			return false, cannotParseError(val, "boolean")
 		}
 	default:
-		panic("cannot parse value: " + val.String() + " to boolean!")
+		return false, cannotParseError(val, "boolean")
 	}
 }
 
 // GetDuration method finds the value at the given path and returns it as a time.Duration
-// returns 0 if the value is not found
+// returns 0 if the value is not found, panics if the value is not a duration
 func (c *Config) GetDuration(path string) time.Duration {
-	value := c.Get(path)
-	if value == nil {
-		return 0
+	durationValue, err := c.GetDurationE(path)
+	if err != nil && !errors.Is(err, ErrPathNotFound) {
+		panic(err)
 	}
 
-	return time.Duration(value.(Duration))
+	return durationValue
+}
+
+// GetDurationE method finds the value at the given path and returns it as a time.Duration
+// returns an error if the value is not found or is not a duration
+func (c *Config) GetDurationE(path string) (time.Duration, error) {
+	value := c.Get(path)
+	if value == nil {
+		return 0, pathNotFoundError(path)
+	}
+
+	duration, ok := value.(Duration)
+	if !ok {
+		return 0, cannotParseError(value, "Duration")
+	}
+
+	return time.Duration(duration), nil
 }
 
 // Get method finds the value at the given path and returns it without casting to any type
@@ -254,6 +410,12 @@ func (c *Config) Get(path string) Value {
 	}
 
 	return c.root.(Object).find(path)
+}
+
+// HasPath method returns true if a value exists at the given path, false otherwise,
+// it can be used to validate the configuration before accessing the values
+func (c *Config) HasPath(path string) bool {
+	return c.Get(path) != nil
 }
 
 // WithFallback method returns a new *Config (or the current config, if the given fallback doesn't get used)

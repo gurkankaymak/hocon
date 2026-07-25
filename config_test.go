@@ -1,6 +1,7 @@
 package hocon
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -338,6 +339,362 @@ func TestGetDuration(t *testing.T) {
 
 	t.Run("panic if the value is not a duration", func(t *testing.T) {
 		assertPanic(t, func() { config.GetDuration("b") })
+	})
+}
+
+func TestHasPath(t *testing.T) {
+	config := &Config{Object{"a": Int(1), "b": Object{"c": String("d")}}}
+
+	t.Run("return true if a value exists at the given path", func(t *testing.T) {
+		assertEquals(t, config.HasPath("b.c"), true)
+	})
+
+	t.Run("return false if no value exists at the given path", func(t *testing.T) {
+		assertEquals(t, config.HasPath("b.e"), false)
+	})
+
+	t.Run("return false if the path traverses through a non-object value", func(t *testing.T) {
+		assertEquals(t, config.HasPath("a.b"), false)
+	})
+}
+
+func TestGetObjectE(t *testing.T) {
+	config := &Config{Object{"a": Object{"b": Int(1)}, "c": Int(2)}}
+
+	t.Run("get object", func(t *testing.T) {
+		got, err := config.GetObjectE("a")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, Object{"b": Int(1)})
+	})
+
+	t.Run("return ErrPathNotFound for a non-existing path", func(t *testing.T) {
+		got, err := config.GetObjectE("d")
+		assertPathNotFoundError(t, err)
+		assertNil(t, got)
+	})
+
+	t.Run("return an error if the value is not an object", func(t *testing.T) {
+		got, err := config.GetObjectE("c")
+		assertError(t, err, errors.New("cannot parse value: 2 to Object!"))
+		assertNil(t, got)
+	})
+}
+
+func TestGetConfigE(t *testing.T) {
+	config := &Config{Object{"a": Object{"b": Int(1)}, "c": Int(2)}}
+
+	t.Run("get config", func(t *testing.T) {
+		got, err := config.GetConfigE("a")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"b": Int(1)}})
+	})
+
+	t.Run("return ErrPathNotFound for a non-existing path", func(t *testing.T) {
+		got, err := config.GetConfigE("d")
+		assertPathNotFoundError(t, err)
+		assertNil(t, got)
+	})
+
+	t.Run("return an error if the value is not an object", func(t *testing.T) {
+		got, err := config.GetConfigE("c")
+		assertError(t, err, errors.New("cannot parse value: 2 to Object!"))
+		assertNil(t, got)
+	})
+}
+
+func TestGetStringMapE(t *testing.T) {
+	config := &Config{Object{"a": Object{"b": Int(1)}, "c": Int(2)}}
+
+	t.Run("get object as map[string]Value", func(t *testing.T) {
+		got, err := config.GetStringMapE("a")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, map[string]Value{"b": Int(1)})
+	})
+
+	t.Run("return ErrPathNotFound for a non-existing path", func(t *testing.T) {
+		got, err := config.GetStringMapE("d")
+		assertPathNotFoundError(t, err)
+		assertNil(t, got)
+	})
+
+	t.Run("return an error if the value is not an object", func(t *testing.T) {
+		got, err := config.GetStringMapE("c")
+		assertError(t, err, errors.New("cannot parse value: 2 to Object!"))
+		assertNil(t, got)
+	})
+}
+
+func TestGetStringMapStringE(t *testing.T) {
+	config := &Config{Object{"a": Object{"b": String("x y"), "e": Int(1)}, "c": Int(2)}}
+
+	t.Run("get object as map[string]string with the raw string values", func(t *testing.T) {
+		got, err := config.GetStringMapStringE("a")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, map[string]string{"b": "x y", "e": "1"})
+	})
+
+	t.Run("return ErrPathNotFound for a non-existing path", func(t *testing.T) {
+		got, err := config.GetStringMapStringE("d")
+		assertPathNotFoundError(t, err)
+		assertNil(t, got)
+	})
+
+	t.Run("return an error if the value is not an object", func(t *testing.T) {
+		got, err := config.GetStringMapStringE("c")
+		assertError(t, err, errors.New("cannot parse value: 2 to Object!"))
+		assertNil(t, got)
+	})
+}
+
+func TestGetArrayE(t *testing.T) {
+	config := &Config{Object{"a": Array{Int(1), Int(2)}, "b": Int(3)}}
+
+	t.Run("get array", func(t *testing.T) {
+		got, err := config.GetArrayE("a")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, Array{Int(1), Int(2)})
+	})
+
+	t.Run("return ErrPathNotFound for a non-existing path", func(t *testing.T) {
+		got, err := config.GetArrayE("c")
+		assertPathNotFoundError(t, err)
+		assertNil(t, got)
+	})
+
+	t.Run("return an error if the value is not an array", func(t *testing.T) {
+		got, err := config.GetArrayE("b")
+		assertError(t, err, errors.New("cannot parse value: 3 to Array!"))
+		assertNil(t, got)
+	})
+}
+
+func TestGetIntSliceE(t *testing.T) {
+	config := &Config{Object{"a": Array{Int(1), Int(2)}, "b": Array{String("c"), Int(1)}}}
+
+	t.Run("get array as int slice", func(t *testing.T) {
+		got, err := config.GetIntSliceE("a")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, []int{1, 2})
+	})
+
+	t.Run("return ErrPathNotFound for a non-existing path", func(t *testing.T) {
+		got, err := config.GetIntSliceE("e")
+		assertPathNotFoundError(t, err)
+		assertNil(t, got)
+	})
+
+	t.Run("return an error if the array contains a non-int element", func(t *testing.T) {
+		got, err := config.GetIntSliceE("b")
+		assertError(t, err, errors.New("cannot parse value: c to int!"))
+		assertNil(t, got)
+	})
+}
+
+func TestGetStringSliceE(t *testing.T) {
+	config := &Config{Object{"a": Array{String("x y"), Int(1)}, "b": Int(2)}}
+
+	t.Run("get array as string slice with the raw string values", func(t *testing.T) {
+		got, err := config.GetStringSliceE("a")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, []string{"x y", "1"})
+	})
+
+	t.Run("return ErrPathNotFound for a non-existing path", func(t *testing.T) {
+		got, err := config.GetStringSliceE("c")
+		assertPathNotFoundError(t, err)
+		assertNil(t, got)
+	})
+
+	t.Run("return an error if the value is not an array", func(t *testing.T) {
+		got, err := config.GetStringSliceE("b")
+		assertError(t, err, errors.New("cannot parse value: 2 to Array!"))
+		assertNil(t, got)
+	})
+}
+
+func TestGetStringE(t *testing.T) {
+	config := &Config{Object{"a": String("b"), "c": Int(2)}}
+
+	t.Run("get string", func(t *testing.T) {
+		got, err := config.GetStringE("a")
+		assertNoError(t, err)
+		assertEquals(t, got, "b")
+	})
+
+	t.Run("convert to string and return the value if it is not a string", func(t *testing.T) {
+		got, err := config.GetStringE("c")
+		assertNoError(t, err)
+		assertEquals(t, got, "2")
+	})
+
+	t.Run("return ErrPathNotFound for a non-existing path", func(t *testing.T) {
+		got, err := config.GetStringE("d")
+		assertPathNotFoundError(t, err)
+		assertEquals(t, got, "")
+	})
+}
+
+func TestGetIntE(t *testing.T) {
+	config := &Config{Object{"a": Int(1), "b": String("2"), "c": String("xyz"), "d": Boolean(true)}}
+
+	t.Run("get int", func(t *testing.T) {
+		got, err := config.GetIntE("a")
+		assertNoError(t, err)
+		assertEquals(t, got, 1)
+	})
+
+	t.Run("convert the numeric string value to int", func(t *testing.T) {
+		got, err := config.GetIntE("b")
+		assertNoError(t, err)
+		assertEquals(t, got, 2)
+	})
+
+	t.Run("return ErrPathNotFound for a non-existing path", func(t *testing.T) {
+		got, err := config.GetIntE("e")
+		assertPathNotFoundError(t, err)
+		assertEquals(t, got, 0)
+	})
+
+	t.Run("return an error if the value is a non-numeric string", func(t *testing.T) {
+		got, err := config.GetIntE("c")
+		assertError(t, err, errors.New(`strconv.Atoi: parsing "xyz": invalid syntax`))
+		assertEquals(t, got, 0)
+	})
+
+	t.Run("return an error if the value cannot be converted to int", func(t *testing.T) {
+		got, err := config.GetIntE("d")
+		assertError(t, err, errors.New("cannot parse value: true to int!"))
+		assertEquals(t, got, 0)
+	})
+}
+
+func TestGetFloat32E(t *testing.T) {
+	config := &Config{Object{"a": Float32(1.5), "b": Float64(2.5), "c": String("3.5"), "d": Boolean(true)}}
+
+	t.Run("get float32", func(t *testing.T) {
+		got, err := config.GetFloat32E("a")
+		assertNoError(t, err)
+		assertEquals(t, got, float32(1.5))
+	})
+
+	t.Run("convert the float64 value to float32", func(t *testing.T) {
+		got, err := config.GetFloat32E("b")
+		assertNoError(t, err)
+		assertEquals(t, got, float32(2.5))
+	})
+
+	t.Run("convert the numeric string value to float32", func(t *testing.T) {
+		got, err := config.GetFloat32E("c")
+		assertNoError(t, err)
+		assertEquals(t, got, float32(3.5))
+	})
+
+	t.Run("return ErrPathNotFound for a non-existing path", func(t *testing.T) {
+		got, err := config.GetFloat32E("e")
+		assertPathNotFoundError(t, err)
+		assertEquals(t, got, float32(0))
+	})
+
+	t.Run("return an error if the value cannot be converted to float32", func(t *testing.T) {
+		got, err := config.GetFloat32E("d")
+		assertError(t, err, errors.New("cannot parse value: true to float32!"))
+		assertEquals(t, got, float32(0))
+	})
+}
+
+func TestGetFloat64E(t *testing.T) {
+	config := &Config{Object{"a": Float64(1.5), "b": Float32(2.5), "c": String("3.5"), "d": Boolean(true)}}
+
+	t.Run("get float64", func(t *testing.T) {
+		got, err := config.GetFloat64E("a")
+		assertNoError(t, err)
+		assertEquals(t, got, 1.5)
+	})
+
+	t.Run("convert the float32 value to float64", func(t *testing.T) {
+		got, err := config.GetFloat64E("b")
+		assertNoError(t, err)
+		assertEquals(t, got, 2.5)
+	})
+
+	t.Run("convert the numeric string value to float64", func(t *testing.T) {
+		got, err := config.GetFloat64E("c")
+		assertNoError(t, err)
+		assertEquals(t, got, 3.5)
+	})
+
+	t.Run("return ErrPathNotFound for a non-existing path", func(t *testing.T) {
+		got, err := config.GetFloat64E("e")
+		assertPathNotFoundError(t, err)
+		assertEquals(t, got, 0.0)
+	})
+
+	t.Run("return an error if the value cannot be converted to float64", func(t *testing.T) {
+		got, err := config.GetFloat64E("d")
+		assertError(t, err, errors.New("cannot parse value: true to float64!"))
+		assertEquals(t, got, 0.0)
+	})
+}
+
+func TestGetBooleanE(t *testing.T) {
+	config := &Config{Object{"a": Boolean(true), "b": String("yes"), "c": String("off"), "d": String("xyz"), "e": Int(1)}}
+
+	t.Run("get boolean", func(t *testing.T) {
+		got, err := config.GetBooleanE("a")
+		assertNoError(t, err)
+		assertEquals(t, got, true)
+	})
+
+	t.Run("convert the truthy string value to boolean", func(t *testing.T) {
+		got, err := config.GetBooleanE("b")
+		assertNoError(t, err)
+		assertEquals(t, got, true)
+	})
+
+	t.Run("convert the falsy string value to boolean", func(t *testing.T) {
+		got, err := config.GetBooleanE("c")
+		assertNoError(t, err)
+		assertEquals(t, got, false)
+	})
+
+	t.Run("return ErrPathNotFound for a non-existing path", func(t *testing.T) {
+		got, err := config.GetBooleanE("f")
+		assertPathNotFoundError(t, err)
+		assertEquals(t, got, false)
+	})
+
+	t.Run("return an error if the value is a non-boolean string", func(t *testing.T) {
+		got, err := config.GetBooleanE("d")
+		assertError(t, err, errors.New("cannot parse value: xyz to boolean!"))
+		assertEquals(t, got, false)
+	})
+
+	t.Run("return an error if the value cannot be converted to boolean", func(t *testing.T) {
+		got, err := config.GetBooleanE("e")
+		assertError(t, err, errors.New("cannot parse value: 1 to boolean!"))
+		assertEquals(t, got, false)
+	})
+}
+
+func TestGetDurationE(t *testing.T) {
+	config := &Config{Object{"a": Duration(5 * time.Second), "b": Int(1)}}
+
+	t.Run("get duration", func(t *testing.T) {
+		got, err := config.GetDurationE("a")
+		assertNoError(t, err)
+		assertEquals(t, got, 5*time.Second)
+	})
+
+	t.Run("return ErrPathNotFound for a non-existing path", func(t *testing.T) {
+		got, err := config.GetDurationE("c")
+		assertPathNotFoundError(t, err)
+		assertEquals(t, got, time.Duration(0))
+	})
+
+	t.Run("return an error if the value is not a duration", func(t *testing.T) {
+		got, err := config.GetDurationE("b")
+		assertError(t, err, errors.New("cannot parse value: 1 to Duration!"))
+		assertEquals(t, got, time.Duration(0))
 	})
 }
 

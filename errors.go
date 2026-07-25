@@ -1,6 +1,21 @@
 package hocon
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
+
+// ErrPathNotFound is the error returned by the Get*E methods when there is no value
+// at the given path, it can be checked with errors.Is
+var ErrPathNotFound = errors.New("path not found")
+
+func pathNotFoundError(path string) error {
+	return fmt.Errorf("%w: %q", ErrPathNotFound, path)
+}
+
+func cannotParseError(value Value, targetType string) error {
+	return fmt.Errorf("cannot parse value: %s to %s!", value, targetType)
+}
 
 // ParseError represents an error occurred while parsing a resource or string to a hocon configuration
 type ParseError struct {

@@ -1,6 +1,7 @@
 package hocon
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 	"text/scanner"
@@ -47,6 +48,15 @@ func assertError(t *testing.T, err, expected error) {
 		t.Fatalf("expected an error but did not get one")
 	} else if expected.Error() != err.Error() {
 		t.Fatalf("wrong error received! expected: %q, got: %q", expected, err)
+	}
+}
+
+func assertPathNotFoundError(t *testing.T, err error) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("expected an error but did not get one")
+	} else if !errors.Is(err, ErrPathNotFound) {
+		t.Fatalf("expected ErrPathNotFound, got: %q", err)
 	}
 }
 
