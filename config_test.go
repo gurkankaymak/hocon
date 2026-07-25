@@ -738,6 +738,76 @@ func TestWithFallback(t *testing.T) {
 	})
 }
 
+func TestResolve(t *testing.T) {
+	t.Run("resolve the substitutions using the values of the fallback config", func(t *testing.T) {
+		mainConfig, err := ParseStringUnresolved("namespace { key: ${namespace.other} }")
+		assertNoError(t, err)
+		fallbackConfig, err := ParseString("namespace { other: value }")
+		assertNoError(t, err)
+		got, err := mainConfig.WithFallback(fallbackConfig).Resolve()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"namespace": Object{"key": String("value"), "other": String("value")}}})
+	})
+
+	t.Run("return an error if a required substitution cannot be resolved", func(t *testing.T) {
+		config, err := ParseStringUnresolved("a = ${nonExisting}")
+		assertNoError(t, err)
+		got, err := config.Resolve()
+		assertError(t, err, errors.New("could not resolve substitution: ${nonExisting} to a value"))
+		assertNil(t, got)
+	})
+
+	t.Run("omit the fields with unresolved optional substitutions", func(t *testing.T) {
+		config, err := ParseStringUnresolved("a = 1\nb = ${?nonExisting}")
+		assertNoError(t, err)
+		got, err := config.Resolve()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": Int(1)}})
+	})
+
+	t.Run("flatten the string value concatenations", func(t *testing.T) {
+		config, err := ParseStringUnresolved("greeting = hello world")
+		assertNoError(t, err)
+		got, err := config.Resolve()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"greeting": String("hello world")}})
+	})
+
+	t.Run("keep an already resolved config unchanged", func(t *testing.T) {
+		config, err := ParseString("a = 1\nb = ${a}")
+		assertNoError(t, err)
+		got, err := config.Resolve()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": Int(1), "b": Int(1)}})
+	})
+
+	t.Run("return the config as it is if the root is not an object", func(t *testing.T) {
+		config, err := ParseString("[1, 2]")
+		assertNoError(t, err)
+		got, err := config.Resolve()
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Array{Int(1), Int(2)}})
+	})
+
+	t.Run("not modify the original configs when the merged config is resolved", func(t *testing.T) {
+		mainConfig, err := ParseStringUnresolved("arr = [${x}]")
+		assertNoError(t, err)
+		fallbackConfig, err := ParseString("x = 5")
+		assertNoError(t, err)
+
+		resolved, err := mainConfig.WithFallback(fallbackConfig).Resolve()
+		assertNoError(t, err)
+		assertDeepEqual(t, resolved, &Config{Object{"x": Int(5), "arr": Array{Int(5)}}})
+		assertDeepEqual(t, mainConfig, &Config{Object{"arr": Array{&Substitution{path: "x", optional: false}}}})
+
+		otherFallback, err := ParseString("x = 7")
+		assertNoError(t, err)
+		resolvedAgain, err := mainConfig.WithFallback(otherFallback).Resolve()
+		assertNoError(t, err)
+		assertDeepEqual(t, resolvedAgain, &Config{Object{"x": Int(7), "arr": Array{Int(7)}}})
+	})
+}
+
 func TestFind(t *testing.T) {
 	t.Run("return nil if path does not contain any dot and there is no value with the given path", func(t *testing.T) {
 		object := Object{"a": Int(1)}

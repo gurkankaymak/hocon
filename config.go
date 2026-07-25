@@ -426,13 +426,36 @@ func (c *Config) WithFallback(fallback *Config) *Config {
 	if current, ok := c.root.(Object); ok {
 		if fallbackObject, ok := fallback.root.(Object); ok {
 			resultConfig := fallbackObject.copy()
-			mergeObjects(resultConfig, current)
+			mergeObjects(resultConfig, current.copy())
 
 			return resultConfig.ToConfig()
 		}
 	}
 
 	return c
+}
+
+// Resolve method resolves the substitutions in the configuration tree in place, as the
+// hocon spec defines: substitutions are looked up in the configuration itself, then in the
+// environment variables, unresolved optional substitutions (${?path}) are omitted and
+// string value concatenations are flattened. It returns the config itself on success and
+// an error if a required substitution cannot be resolved to any value.
+//
+// The Parse* functions already return resolved configs, Resolve is meant to be used with
+// the ParseStringUnresolved and ParseResourceUnresolved functions, e.g. to resolve
+// substitutions with the values of a fallback config:
+//
+//	config, err := hocon.ParseStringUnresolved(mainConfig)
+//	...
+//	config, err = config.WithFallback(fallbackConfig).Resolve()
+func (c *Config) Resolve() (*Config, error) {
+	if root, ok := c.root.(Object); ok {
+		if err := resolveSubstitutions(root); err != nil {
+			return nil, err
+		}
+	}
+
+	return c, nil
 }
 
 // Value interface represents a value in the configuration tree, all the value types implements this interface
@@ -552,15 +575,41 @@ func (o Object) copy() Object {
 	result := Object{}
 
 	for k, v := range o {
-		subObject, ok := v.(Object)
-		if ok {
-			result[k] = subObject.copy()
-		} else {
-			result[k] = v
-		}
+		result[k] = copyValue(v)
 	}
 
 	return result
+}
+
+// copyValue deep-copies the values that the substitution resolution modifies in place
+// (objects, arrays, concatenations and values with alternatives), so that resolving a
+// config does not modify the configs it was created from; the other values are immutable
+// and are returned as they are
+func copyValue(value Value) Value {
+	switch v := value.(type) {
+	case Object:
+		return v.copy()
+	case Array:
+		result := make(Array, len(v))
+
+		for i, element := range v {
+			result[i] = copyValue(element)
+		}
+
+		return result
+	case concatenation:
+		result := make(concatenation, len(v))
+
+		for i, element := range v {
+			result[i] = copyValue(element)
+		}
+
+		return result
+	case *valueWithAlternative:
+		return &valueWithAlternative{value: copyValue(v.value), alternative: v.alternative}
+	default:
+		return value
+	}
 }
 
 // Array represents an array node in the configuration tree

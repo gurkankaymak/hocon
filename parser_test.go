@@ -38,6 +38,41 @@ func TestParseResource(t *testing.T) {
 	})
 }
 
+func TestParseStringUnresolved(t *testing.T) {
+	t.Run("parse the string without resolving the substitutions", func(t *testing.T) {
+		got, err := ParseStringUnresolved("a = 1\nb = ${a}")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": Int(1), "b": &Substitution{path: "a", optional: false}}})
+	})
+
+	t.Run("parse the string containing unresolvable substitutions without an error", func(t *testing.T) {
+		got, err := ParseStringUnresolved("namespace { key: ${namespace.other} }")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"namespace": Object{"key": &Substitution{path: "namespace.other", optional: false}}}})
+	})
+
+	t.Run("return the parse errors", func(t *testing.T) {
+		got, err := ParseStringUnresolved("{.a:1}")
+		assertError(t, err, leadingPeriodError(1, 2))
+		assertNil(t, got)
+	})
+}
+
+func TestParseResourceUnresolved(t *testing.T) {
+	t.Run("return error if there is an error in the os.Open(path) method", func(t *testing.T) {
+		got, err := ParseResourceUnresolved("nonExistPath")
+		expectedError := fmt.Errorf("could not parse resource: open nonExistPath: no such file or directory")
+		assertError(t, err, expectedError)
+		assertNil(t, got)
+	})
+
+	t.Run("parse the resource without resolving the substitutions", func(t *testing.T) {
+		got, err := ParseResourceUnresolved("testdata/unresolved.conf")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"key": &Substitution{path: "fallback-value", optional: false}}})
+	})
+}
+
 func TestParse(t *testing.T) {
 	t.Run("try to parse as config array if the input starts with '[' and return the error from extractArray if any", func(t *testing.T) {
 		parser := newParser(strings.NewReader("[5"))

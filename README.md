@@ -112,6 +112,23 @@ func main() {
 }
 ```
 
+## Delayed substitution resolution
+
+`ParseString` and `ParseResource` resolve the substitutions immediately and fail if a required substitution
+cannot be resolved. To resolve substitutions with the values of another config (e.g. a fallback config),
+parse with `ParseStringUnresolved` or `ParseResourceUnresolved` and call `Resolve` after merging:
+
+```go
+config, err := hocon.ParseStringUnresolved(mainConfig)
+if err != nil {
+    log.Fatal(err)
+}
+config, err = config.WithFallback(fallbackConfig).Resolve()
+if err != nil {
+    log.Fatal(err)
+}
+```
+
 ## Error handling
 
 The `Get*` methods return the zero value of the requested type if there is no value at the given path

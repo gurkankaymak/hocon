@@ -73,6 +73,18 @@ func ParseString(input string) (*Config, error) {
 	return parser.parse()
 }
 
+// ParseStringUnresolved parses the given hocon string like ParseString, but does not
+// resolve the substitutions, so that the values of another config (e.g. a fallback config)
+// can be used to resolve them later with the Resolve method:
+//
+//	config, err := hocon.ParseStringUnresolved(mainConfig)
+//	...
+//	config, err = config.WithFallback(fallbackConfig).Resolve()
+func ParseStringUnresolved(input string) (*Config, error) {
+	parser := newParser(strings.NewReader(input))
+	return parser.parseUnresolved()
+}
+
 // ParseResource parses the resource at the given path, creates the configuration tree and
 // returns a pointer to the Config, returns the error if any error occurs while parsing
 func ParseResource(path string) (*Config, error) {
@@ -84,7 +96,28 @@ func ParseResource(path string) (*Config, error) {
 	return newFileParser(file).parse()
 }
 
+// ParseResourceUnresolved parses the resource at the given path like ParseResource,
+// but does not resolve the substitutions, so that the values of another config
+// (e.g. a fallback config) can be used to resolve them later with the Resolve method
+func ParseResourceUnresolved(path string) (*Config, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("could not parse resource: %w", err)
+	}
+
+	return newFileParser(file).parseUnresolved()
+}
+
 func (p *parser) parse() (*Config, error) {
+	config, err := p.parseUnresolved()
+	if err != nil {
+		return nil, err
+	}
+
+	return config.Resolve()
+}
+
+func (p *parser) parseUnresolved() (*Config, error) {
 	p.advance()
 
 	if p.scanner.TokenText() == arrayStartToken {
@@ -103,11 +136,6 @@ func (p *parser) parse() (*Config, error) {
 
 	if token := p.scanner.TokenText(); token != "" {
 		return nil, invalidObjectError("invalid token "+token, p.scanner.Line, p.scanner.Column)
-	}
-
-	err = resolveSubstitutions(object)
-	if err != nil {
-		return nil, err
 	}
 
 	return &Config{root: object}, nil
