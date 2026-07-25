@@ -362,6 +362,12 @@ func TestFind(t *testing.T) {
 		got := object.find("a.b")
 		assertEquals(t, got, Int(1))
 	})
+
+	t.Run("return nil if the path traverses through a non-object value", func(t *testing.T) {
+		object := Object{"a": Int(1)}
+		got := object.find("a.b")
+		assertNil(t, got)
+	})
 }
 
 func TestObject_String(t *testing.T) {
@@ -518,5 +524,17 @@ func TestContainsObject(t *testing.T) {
 		concatenation := concatenation{Object{"a": String("aa")}, String("b")}
 		got := concatenation.containsObject()
 		assertEquals(t, got, true)
+	})
+
+	t.Run("return true if the concatenation contains a nil element and an Object", func(t *testing.T) {
+		concatenation := concatenation{nil, Object{"a": String("aa")}}
+		got := concatenation.containsObject()
+		assertEquals(t, got, true)
+	})
+
+	t.Run("return false if the concatenation contains only nil and non-object elements", func(t *testing.T) {
+		concatenation := concatenation{nil, String("b")}
+		got := concatenation.containsObject()
+		assertEquals(t, got, false)
 	})
 }

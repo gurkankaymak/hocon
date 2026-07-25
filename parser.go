@@ -126,7 +126,17 @@ func (p *parser) advance() {
 
 func resolveSubstitutions(root Object, valueOptional ...Value) error {
 	visitedPaths := make(map[string]bool)
-	return resolveAcyclicSubstitutions(root, visitedPaths, valueOptional...)
+
+	err := resolveAcyclicSubstitutions(root, visitedPaths, valueOptional...)
+	if err != nil {
+		return err
+	}
+
+	if valueOptional == nil {
+		removeUnresolved(root)
+	}
+
+	return nil
 }
 
 func resolveAcyclicSubstitutions(root Object, visitedPaths map[string]bool, valueOptional ...Value) error {
@@ -163,6 +173,10 @@ func resolveAcyclicSubstitutions(root Object, visitedPaths map[string]bool, valu
 				merged := Object{}
 
 				for _, value := range concatenationValue {
+					if value == nil { // unresolved optional substitutions merge as an empty object
+						continue
+					}
+
 					object, ok := value.(Object)
 					if !ok {
 						return invalidConcatenationError()
@@ -171,7 +185,7 @@ func resolveAcyclicSubstitutions(root Object, visitedPaths map[string]bool, valu
 					mergeObjects(merged, object)
 				}
 
-				root[key] = merged
+				v[key] = merged
 			}
 		}
 	default:
@@ -201,8 +215,10 @@ func processSubstitution(root Object, value Value, visitedPaths map[string]bool,
 				return nil
 			}
 		}
+		// the alternative could not be resolved, fall back to the original value,
+		// which may itself be or contain a substitution
 		resolveFunc(withAlternative.value)
-		return nil
+		return processSubstitution(root, withAlternative.value, visitedPaths, resolveFunc)
 	} else if valueType == ObjectType || valueType == ArrayType || valueType == ConcatenationType {
 		return resolveAcyclicSubstitutions(root, visitedPaths, value)
 	}
@@ -223,13 +239,84 @@ func processSubstitutionType(root Object, substitution *Substitution, visitedPat
 		}
 
 		delete(visitedPaths, substitution.path)
-		return foundValue, nil
-	} else if env, ok := os.LookupEnv(substitution.path); ok {
+
+		if foundValue != nil {
+			return foundValue, nil
+		}
+		// the found value is itself an unresolved optional substitution, treat the path as undefined and fall through
+	}
+
+	if env, ok := os.LookupEnv(substitution.path); ok {
 		return String(env), nil
-	} else if !substitution.optional {
+	}
+
+	if !substitution.optional {
 		return nil, errors.New("could not resolve substitution: " + substitution.String() + " to a value")
 	}
+
 	return nil, nil
+}
+
+// removeUnresolved removes the values of the unresolved optional substitutions
+// (fields, array elements and concatenation parts whose value is an undefined ${?path})
+// from the configuration tree, as the hocon spec requires them to be omitted
+func removeUnresolved(value Value) Value {
+	switch v := value.(type) {
+	case Object:
+		for key, element := range v {
+			if resolved := removeUnresolved(element); resolved == nil {
+				delete(v, key)
+			} else {
+				v[key] = resolved
+			}
+		}
+
+		return v
+	case Array:
+		containsNil := false
+
+		for i, element := range v {
+			if v[i] = removeUnresolved(element); v[i] == nil {
+				containsNil = true
+			}
+		}
+
+		if !containsNil {
+			return v
+		}
+
+		result := make(Array, 0, len(v))
+
+		for _, element := range v {
+			if element != nil {
+				result = append(result, element)
+			}
+		}
+
+		return result
+	case concatenation:
+		result := make(concatenation, 0, len(v))
+
+		for _, element := range v {
+			resolved := removeUnresolved(element)
+			if resolved == nil || resolved == String("") { // empty strings do not contribute to a concatenation
+				continue
+			}
+
+			result = append(result, resolved)
+		}
+
+		switch len(result) {
+		case 0:
+			return nil
+		case 1:
+			return result[0]
+		default:
+			return result
+		}
+	default:
+		return value
+	}
 }
 
 func (p *parser) extractObject(isSubObject ...bool) (Object, error) {

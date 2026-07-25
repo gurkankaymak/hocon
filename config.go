@@ -365,7 +365,12 @@ func (o Object) find(path string) Value {
 			return nil
 		}
 
-		object = value.(Object)
+		subObject, ok := value.(Object)
+		if !ok {
+			return nil
+		}
+
+		object = subObject
 	}
 
 	return object[lastKey]
@@ -507,7 +512,7 @@ func (c concatenation) Type() Type           { return ConcatenationType }
 func (c concatenation) isConcatenable() bool { return true }
 func (c concatenation) containsObject() bool {
 	for _, value := range c {
-		if value.Type() == ObjectType {
+		if value != nil && value.Type() == ObjectType {
 			return true
 		}
 	}

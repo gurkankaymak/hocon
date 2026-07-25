@@ -753,10 +753,11 @@ func TestResolveSubstitutions(t *testing.T) {
 		assertError(t, err, expectedError)
 	})
 
-	t.Run("ignore the optional substitution if it's path does not exist", func(t *testing.T) {
+	t.Run("remove the field if the optional substitution path does not exist", func(t *testing.T) {
 		object := Object{"a": Int(5), "b": &Substitution{"c", true}}
 		err := resolveSubstitutions(object)
 		assertNoError(t, err)
+		assertDeepEqual(t, object, Object{"a": Int(5)})
 	})
 
 	t.Run("resolve valid substitution at the non-root level", func(t *testing.T) {
@@ -890,6 +891,109 @@ func TestResolveSubstitutions(t *testing.T) {
 		got, err := parser.extractObject()
 		assertNoError(t, err)
 		assertDeepEqual(t, got, expected)
+	})
+}
+
+func TestRemoveUnresolved(t *testing.T) {
+	t.Run("remove the unresolved values from objects, arrays and concatenations", func(t *testing.T) {
+		object := Object{
+			"a": nil,
+			"b": Array{Int(1), nil},
+			"c": concatenation{String("x"), String(""), nil},
+			"d": Object{"e": nil},
+		}
+		removeUnresolved(object)
+		assertDeepEqual(t, object, Object{"b": Array{Int(1)}, "c": String("x"), "d": Object{}})
+	})
+
+	t.Run("keep the resolved values as they are", func(t *testing.T) {
+		object := Object{"a": Int(1), "b": Array{String("x")}, "c": concatenation{String("x"), String(" "), String("y")}}
+		removeUnresolved(object)
+		assertDeepEqual(t, object, Object{"a": Int(1), "b": Array{String("x")}, "c": concatenation{String("x"), String(" "), String("y")}})
+	})
+
+	t.Run("remove the concatenation if all of its elements are removed", func(t *testing.T) {
+		object := Object{"a": concatenation{nil, nil}}
+		removeUnresolved(object)
+		assertDeepEqual(t, object, Object{})
+	})
+}
+
+func TestOmitUnresolvedOptionalSubstitutions(t *testing.T) {
+	t.Run("omit the field if its value is an unresolved optional substitution", func(t *testing.T) {
+		got, err := ParseString("a = 1\nb = ${?c}")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": Int(1)}})
+		assertEquals(t, got.String(), "{a:1}")
+	})
+
+	t.Run("omit the array element if it is an unresolved optional substitution", func(t *testing.T) {
+		got, err := ParseString("a = [1, ${?c}, 2]")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": Array{Int(1), Int(2)}}})
+	})
+
+	t.Run("drop the unresolved optional substitution from a concatenation", func(t *testing.T) {
+		got, err := ParseString("a = abc${?c}")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": String("abc")}})
+	})
+
+	t.Run("keep the previous value if the field is overridden with an unresolved optional substitution", func(t *testing.T) {
+		got, err := ParseString("a = { y = 1 }\na = ${?nonExisting}")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": Object{"y": Int(1)}}})
+	})
+
+	t.Run("resolve to the object if an unresolved optional substitution is overridden with an object", func(t *testing.T) {
+		got, err := ParseString("a = ${?nonExisting}\na = { y = 1 }")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": Object{"y": Int(1)}}})
+	})
+
+	t.Run("omit the field if it is overridden with another unresolved optional substitution", func(t *testing.T) {
+		got, err := ParseString("a = ${?nonExisting1}\na = ${?nonExisting2}")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{}})
+	})
+
+	t.Run("fall back through multiple unresolved optional substitutions to the original value", func(t *testing.T) {
+		got, err := ParseString("a = 1\na = ${?nonExisting1}\na = ${?nonExisting2}")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": Int(1)}})
+	})
+
+	t.Run("resolve the substitutions inside the fallback value if the alternative substitution is unresolved", func(t *testing.T) {
+		got, err := ParseString("z = 5\na = [${z}]\na = ${?nonExisting}")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"z": Int(5), "a": Array{Int(5)}}})
+	})
+
+	t.Run("return an error if a required substitution path refers to an unresolved optional substitution", func(t *testing.T) {
+		got, err := ParseString("b = ${?nonExisting}\na = ${b}")
+		assertError(t, err, errors.New("could not resolve substitution: ${b} to a value"))
+		assertNil(t, got)
+	})
+
+	t.Run("omit the field if its optional substitution path refers to another unresolved optional substitution", func(t *testing.T) {
+		got, err := ParseString("b = ${?nonExisting}\na = ${?b}")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{}})
+	})
+
+	t.Run("return an error if a required substitution path traverses through a non-object value", func(t *testing.T) {
+		got, err := ParseString("x = 1\na = ${x.y}")
+		assertError(t, err, errors.New("could not resolve substitution: ${x.y} to a value"))
+		assertNil(t, got)
+	})
+
+	t.Run("merge the concatenated objects into the enclosing object instead of the root object", func(t *testing.T) {
+		got, err := ParseString("x = { z = 1 }\nouter {\n  a = ${x}\n  a = { y = 2 }\n}")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{
+			"x":     Object{"z": Int(1)},
+			"outer": Object{"a": Object{"z": Int(1), "y": Int(2)}},
+		}})
 	})
 }
 
