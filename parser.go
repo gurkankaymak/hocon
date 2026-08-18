@@ -1143,7 +1143,7 @@ func (p *parser) extractSubstitution() (*Substitution, error) {
 
 	var previousToken string
 
-	for tok := p.scanner.Peek(); tok != scanner.EOF; p.scanner.Peek() {
+	for tok := p.scanner.Peek(); tok != scanner.EOF; tok = p.scanner.Peek() {
 		if isComment(token, p.scanner.Peek()) {
 			return nil, invalidSubstitutionError("comments are not allowed inside substitutions", p.scanner.Line, p.scanner.Column)
 		}
