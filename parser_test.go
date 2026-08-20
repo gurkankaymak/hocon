@@ -1988,6 +1988,24 @@ func TestExtractSubstitution(t *testing.T) {
 		assertNil(t, substitution)
 	})
 
+	t.Run("return invalidSubstitutionError if the closing parenthesis is missing after a path separator", func(t *testing.T) {
+		parser := newParser(strings.NewReader("a:${b."))
+		advanceScanner(t, parser, "$")
+		expectedError := invalidSubstitutionError("missing closing parenthesis", 1, 6)
+		substitution, err := parser.extractSubstitution()
+		assertError(t, err, expectedError)
+		assertNil(t, substitution)
+	})
+
+	t.Run("return invalidSubstitutionError if the closing parenthesis is missing in a multi segment path", func(t *testing.T) {
+		parser := newParser(strings.NewReader("a:${b.c.d"))
+		advanceScanner(t, parser, "$")
+		expectedError := invalidSubstitutionError("missing closing parenthesis", 1, 9)
+		substitution, err := parser.extractSubstitution()
+		assertError(t, err, expectedError)
+		assertNil(t, substitution)
+	})
+
 	t.Run("return trailingPeriodError if the path expression starts with a period '.' ", func(t *testing.T) {
 		parser := newParser(strings.NewReader("a:${a.}"))
 		advanceScanner(t, parser, "$")
