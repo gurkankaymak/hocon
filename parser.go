@@ -1211,6 +1211,8 @@ func (p *parser) extractMultiLineString() (String, error) {
 	}
 
 	if adjacentQuoteCount >= 3 {
+		p.advance()
+
 		return String(multiLineBuilder.String()[:multiLineBuilder.Len()-3]), nil
 	}
 
