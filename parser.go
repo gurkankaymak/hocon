@@ -1,6 +1,7 @@
 package hocon
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -476,7 +477,15 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 			}
 		}
 
-		key = strings.Trim(key, `"`)
+		if strings.HasPrefix(key, `"`) {
+			unquotedKey, err := p.unquote(key)
+			if err != nil {
+				return nil, err
+			}
+
+			key = unquotedKey
+		}
+
 		if strings.HasPrefix(key, dotToken) && key != dotToken {
 			key = strings.TrimPrefix(key, dotToken)
 		}
@@ -977,9 +986,14 @@ func (p *parser) extractValue() (Value, error) {
 			return p.extractMultiLineString()
 		}
 
+		unquoted, err := p.unquote(token)
+		if err != nil {
+			return nil, err
+		}
+
 		p.advance()
 
-		return String(strings.Trim(token, `"`)), nil
+		return String(unquoted), nil
 	case scanner.Ident:
 		token = p.glueAdjacent(token)
 
@@ -1187,6 +1201,16 @@ func (p *parser) consumeComment() {
 		p.advance()
 	}
 	p.advance()
+}
+
+// unquote decodes the quoted string token by the JSON string rules, as the HOCON spec defines quoted strings
+func (p *parser) unquote(token string) (string, error) {
+	var unquoted string
+	if err := json.Unmarshal([]byte(token), &unquoted); err != nil {
+		return "", invalidQuotedStringError(token, p.scanner.Line, p.scanner.Column)
+	}
+
+	return unquoted, nil
 }
 
 func (p *parser) extractMultiLineString() (String, error) {

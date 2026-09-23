@@ -74,6 +74,10 @@ func invalidValueError(message string, line, column int) *ParseError {
 	return parseError("invalid value!", message, line, column)
 }
 
+func invalidQuotedStringError(token string, line, column int) *ParseError {
+	return parseError("invalid quoted string!", fmt.Sprintf("%s is not a valid JSON string, check its escape sequences", token), line, column)
+}
+
 func unclosedMultiLineStringError() *ParseError {
 	return parseError("unclosed multi-line string!", "", 0, 0)
 }

@@ -1271,6 +1271,44 @@ func TestUnquotedValuesAndKeysWithDots(t *testing.T) {
 	})
 }
 
+func TestQuotedStringEscapes(t *testing.T) {
+	t.Run("decode the escape sequences in quoted string values", func(t *testing.T) {
+		got, err := ParseString(`a = "one\ntwo\tthree\\four\/fiveé"`)
+		assertNoError(t, err)
+		assertEquals(t, got.GetString("a"), "one\ntwo\tthree\\four/fiveé")
+	})
+
+	t.Run("keep the escaped quotes in quoted string values, including at the end", func(t *testing.T) {
+		got, err := ParseString(`a = "say \"hi\""`)
+		assertNoError(t, err)
+		assertEquals(t, got.GetString("a"), `say "hi"`)
+	})
+
+	t.Run("decode the escape sequences in quoted keys", func(t *testing.T) {
+		got, err := ParseString(`"k\"e\ty" = 1`)
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"k\"e\ty": Int(1)}})
+	})
+
+	t.Run("decode the escape sequences in concatenated quoted strings", func(t *testing.T) {
+		got, err := ParseString(`a = "x\n" "\"y\""`)
+		assertNoError(t, err)
+		assertEquals(t, got.GetString("a"), "x\n \"y\"")
+	})
+
+	t.Run("return an invalidQuotedStringError if a quoted string value contains an invalid escape sequence", func(t *testing.T) {
+		got, err := ParseString(`a = "\q"`)
+		assertError(t, err, invalidQuotedStringError(`"\q"`, 1, 5))
+		assertNil(t, got)
+	})
+
+	t.Run("return an invalidQuotedStringError if a quoted key contains an invalid escape sequence", func(t *testing.T) {
+		got, err := ParseString(`"\x41" = 1`)
+		assertError(t, err, invalidQuotedStringError(`"\x41"`, 1, 1))
+		assertNil(t, got)
+	})
+}
+
 func TestConcatenations(t *testing.T) {
 	t.Run("concatenate an array substitution with an array", func(t *testing.T) {
 		got, err := ParseString("b : [ 1, 2 ]\na : ${b} [ 3, 4 ]")
