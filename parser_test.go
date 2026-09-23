@@ -2081,6 +2081,62 @@ func TestExtractMultiLineString(t *testing.T) {
 	})
 }
 
+func TestMultiLineStringFollowedByOtherTokens(t *testing.T) {
+	t.Run("parse the key that follows a multi-line string", func(t *testing.T) {
+		got, err := ParseString("a = \"\"\"x\"\"\"\nb = 1\n")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": String("x"), "b": Int(1)}})
+	})
+
+	t.Run("parse the key that follows a multi-line string spanning several lines", func(t *testing.T) {
+		got, err := ParseString("a = \"\"\"\n  x\n  \"\"\"\nb = 1\n")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": String("\n  x\n  "), "b": Int(1)}})
+	})
+
+	t.Run("parse the key that follows a multi-line string inside an object", func(t *testing.T) {
+		got, err := ParseString("o {\n  a = \"\"\"x\"\"\"\n  b = 1\n}")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"o": Object{"a": String("x"), "b": Int(1)}}})
+	})
+
+	t.Run("parse the multi-line string followed by the closing brace of an object", func(t *testing.T) {
+		got, err := ParseString("o {\n  a = \"\"\"x\"\"\"\n}")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"o": Object{"a": String("x")}}})
+	})
+
+	t.Run("parse the multi-line string followed by a comment", func(t *testing.T) {
+		got, err := ParseString("a = \"\"\"x\"\"\"\n# note\nb = 1\n")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": String("x"), "b": Int(1)}})
+	})
+
+	t.Run("parse the multi-line string followed by a newline at the end of the file", func(t *testing.T) {
+		got, err := ParseString("a = \"\"\"x\"\"\"\n")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": String("x")}})
+	})
+
+	t.Run("parse the multi-line string followed by a comma", func(t *testing.T) {
+		got, err := ParseString("a = \"\"\"x\"\"\", b = 1")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": String("x"), "b": Int(1)}})
+	})
+
+	t.Run("concatenate the multi-line string with the following quoted string", func(t *testing.T) {
+		got, err := ParseString("a = \"\"\"x\"\"\" \"y\"")
+		assertNoError(t, err)
+		assertEquals(t, got.GetString("a"), "x y")
+	})
+
+	t.Run("parse the multi-line strings inside an array", func(t *testing.T) {
+		got, err := ParseString("a = [\"\"\"x\"\"\", \"\"\"y\"\"\"]")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": Array{String("x"), String("y")}}})
+	})
+}
+
 func TestIsSubstitution(t *testing.T) {
 	var testCases = []struct {
 		token       string
