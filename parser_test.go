@@ -4,10 +4,127 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestParseNegativeValues(t *testing.T) {
+	minInt := -int(^uint(0)>>1) - 1
+	for _, tc := range []struct {
+		name  string
+		input string
+		want  Value
+	}{
+		{"integer", "-1", Int(-1)},
+		{"minimum integer", strconv.Itoa(minInt), Int(minInt)},
+		{"integer overflow text", strconv.Itoa(minInt) + "0", String(strconv.Itoa(minInt) + "0")},
+		{"integer zero", "-0", Int(0)},
+		{"decimal", "-1.5", Float64(-1.5)},
+		{"fraction", "-0.25", Float64(-0.25)},
+		{"exponent", "-1e2", Float64(-100)},
+		{"positive exponent", "-1e+2", Float64(-100)},
+		{"negative exponent", "-1e-2", Float64(-0.01)},
+		{"uppercase exponent", "-1E+2", Float64(-100)},
+		{"attached duration", "-2s", Duration(-2 * time.Second)},
+		{"separated duration", "-2 seconds", Duration(-2 * time.Second)},
+		{"decimal duration", "-1.5h", Duration(-90 * time.Minute)},
+		{"separated decimal duration", "-1.5 hours", Duration(-90 * time.Minute)},
+		{"quoted number", `"-1"`, String("-1")},
+		{"text", "-foo", String("-foo")},
+		{"multiple minuses", "--foo", String("--foo")},
+		{"leading dot", "-.1", String("-.1")},
+		{"version", "-1.2.3", String("-1.2.3")},
+		{"number suffix", "-1foo", String("-1foo")},
+		{"version suffix", "-1.2.3-SNAPSHOT", String("-1.2.3-SNAPSHOT")},
+		{"hexadecimal text", "-0x10", String("-0x10")},
+		{"binary text", "-0b10", String("-0b10")},
+		{"octal text", "-0o10", String("-0o10")},
+		{"hexadecimal float text", "-0x1.2p3", String("-0x1.2p3")},
+		{"underscore text", "-1_000", String("-1_000")},
+		{"decimal underscore text", "-1.2_3", String("-1.2_3")},
+		{"duration underscore text", "-1_0s", String("-1_0s")},
+		{"positive integer", "1", Int(1)},
+		{"positive exponent control", "1e+2", Float64(100)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, context := range []struct {
+				name  string
+				input string
+				want  *Config
+			}{
+				{"field", "value=" + tc.input, &Config{Object{"value": tc.want}}},
+				{"array", "values=[" + tc.input + "]", &Config{Object{"values": Array{tc.want}}}},
+				{"root array", "[" + tc.input + "]", &Config{Array{tc.want}}},
+			} {
+				t.Run(context.name, func(t *testing.T) {
+					got, err := ParseString(context.input)
+					assertNoError(t, err)
+					assertDeepEqual(t, got, context.want)
+				})
+			}
+		})
+	}
+}
+
+func TestParseNegativeIntegerSlice(t *testing.T) {
+	config, err := ParseString("values=[-1,0,2,-3]")
+	assertNoError(t, err)
+	got, err := config.GetIntSliceE("values")
+	assertNoError(t, err)
+	assertDeepEqual(t, got, []int{-1, 0, 2, -3})
+}
+
+func TestParseNegativeUnquotedExponentPlus(t *testing.T) {
+	for _, value := range []string{
+		"-0x1.2p+3", "-0X1.2P+3", "-.1e+2", "--1e+2", "--.1e+2", "--0x1p+2",
+		"-1-.2e+3", "-1foo.2e+3", "-1.2.3e+4", "-1e+2.3e+4", "-1e+2suffix.3e+4",
+	} {
+		for _, input := range []string{"value=" + value, "values=[" + value + "]", "[" + value + "]"} {
+			t.Run(input, func(t *testing.T) {
+				if _, err := ParseString(input); err == nil {
+					t.Fatal("expected an error for plus in an unquoted string")
+				}
+			})
+		}
+	}
+}
+
+func TestParseMinusPrefixedPaths(t *testing.T) {
+	config, err := ParseString("-key=-1\n-1=-2\nfoo-bar=-3\ncopy=${-key}\nnumeric=${-1}\ntext=${foo-bar}\nspaced=- 1")
+	assertNoError(t, err)
+	assertDeepEqual(t, config, &Config{Object{
+		"-key": Int(-1), "-1": Int(-2), "foo-bar": Int(-3),
+		"copy": Int(-1), "numeric": Int(-2), "text": Int(-3),
+		"spaced": String("- 1"),
+	}})
+}
+
+func TestParseMinusPrefixedDottedPaths(t *testing.T) {
+	config, err := ParseString("-1.2=3\n-2.3.foo=4\ncopy=${-1.2}\nnested=${-2.3.foo}\noptional=${?-1.2}\nvalue=-1.5")
+	assertNoError(t, err)
+	assertDeepEqual(t, config, &Config{Object{
+		"-1": Object{"2": Int(3)}, "-2": Object{"3": Object{"foo": Int(4)}},
+		"copy": Int(3), "nested": Int(4), "optional": Int(3), "value": Float64(-1.5),
+	}})
+}
+
+func TestParseMinusPrefixedPathPlus(t *testing.T) {
+	for _, key := range []string{"-1e+2", "--1e+2", "-0x1p+2", "-1e+2.foo"} {
+		for _, input := range []string{
+			key + "=3",
+			strconv.Quote(key) + "=3\ncopy=${" + key + "}",
+			strconv.Quote(key) + "=3\ncopy=${?" + key + "}",
+		} {
+			t.Run(input, func(t *testing.T) {
+				if _, err := ParseString(input); err == nil {
+					t.Fatal("expected an error for plus in an unquoted path")
+				}
+			})
+		}
+	}
+}
 
 func TestParseString(t *testing.T) {
 	t.Run("parse the string and return a pointer to the Config", func(t *testing.T) {
