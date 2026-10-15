@@ -61,7 +61,7 @@ func newScanner(src io.Reader) *scanner.Scanner {
 	s.Mode &^= scanner.ScanComments | scanner.SkipComments // do not treat the go comments ('//' and '/* */') as comments, hocon comments ('#' and '//') are handled by the parser
 	s.Error = func(*scanner.Scanner, string) {}            // do not print errors to stderr
 	s.IsIdentRune = func(ch rune, i int) bool {
-		return ch == '_' || ch == '-' || unicode.IsLetter(ch) || unicode.IsDigit(ch) && i > 0
+		return ch == '_' || ch == '-' && i > 0 || unicode.IsLetter(ch) || unicode.IsDigit(ch) && i > 0
 	}
 
 	return s
@@ -470,11 +470,17 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 
 		key := p.scanner.TokenText()
 		if !strings.HasPrefix(key, `"`) && key != dotToken {
+			mode := p.scanner.Mode
 			// glue the tokens that immediately follow, as the scanner splits keys with numeric path segments like ".2g" into multiple tokens
 			for isAdjacentKeyRune(p.scanner.Peek()) {
+				if strings.HasSuffix(key, "-") {
+					// keep the dots after a minus as path separators, the scanner would otherwise read "2.3" of "1-2.3" as a float
+					p.scanner.Mode &^= scanner.ScanFloats
+				}
 				p.advance()
 				key += p.scanner.TokenText()
 			}
+			p.scanner.Mode = mode
 		}
 
 		if strings.HasPrefix(key, `"`) {
@@ -873,7 +879,8 @@ func (p *parser) extractArray() (Array, error) {
 			token = p.scanner.TokenText()
 		}
 
-		if p.scanner.Line == lastRow && token != commaToken && token != arrayEndToken {
+		// at the end of the input there is nothing left to concatenate, the array is reported as not closed below
+		if p.scanner.Line == lastRow && token != commaToken && token != arrayEndToken && p.currentRune != scanner.EOF {
 			concatenatedValue, err := p.checkConcatenation(value)
 			if err != nil {
 				return nil, err
@@ -938,16 +945,35 @@ func (p *parser) extractValue() (Value, error) {
 		p.consumeComment()
 		token = p.scanner.TokenText()
 	}
+	if token == "-" && p.scanner.Peek() >= '0' && p.scanner.Peek() <= '9' {
+		p.advance()
+		token += p.scanner.TokenText()
+		if strings.ContainsAny(token, "_xXoObB") {
+			token = p.glueAdjacent(token)
+			if !isUnquotedString(token) {
+				return nil, invalidValueError(fmt.Sprintf("unknown value: %q", token), p.scanner.Line, p.scanner.Column)
+			}
+			p.advance()
+			return String(token), nil
+		}
+	}
 
 	switch p.currentRune {
 	case scanner.Int:
 		if glued := p.glueAdjacent(token); glued != token {
+			if strings.HasPrefix(token, "-") && !isUnquotedString(glued[len(token):]) {
+				return nil, invalidValueError(fmt.Sprintf("unknown value: %q", glued), p.scanner.Line, p.scanner.Column)
+			}
 			p.advance()
 			return numberLedValue(glued), nil
 		}
 
 		value, err := strconv.Atoi(token)
 		if err != nil {
+			if strings.HasPrefix(token, "-") {
+				p.advance()
+				return String(token), nil
+			}
 			return nil, err
 		}
 
@@ -960,6 +986,9 @@ func (p *parser) extractValue() (Value, error) {
 		return Int(value), nil
 	case scanner.Float:
 		if glued := p.glueAdjacent(token); glued != token {
+			if strings.HasPrefix(token, "-") && !isUnquotedString(glued[len(token):]) {
+				return nil, invalidValueError(fmt.Sprintf("unknown value: %q", glued), p.scanner.Line, p.scanner.Column)
+			}
 			p.advance()
 			return numberLedValue(glued), nil
 		}
@@ -1017,6 +1046,12 @@ func (p *parser) extractValue() (Value, error) {
 		case isSubstitution(token, p.scanner.Peek()):
 			return p.extractSubstitution()
 		case isUnquotedString(token):
+			if token == "-" {
+				token = p.glueAdjacent(token)
+				if !isUnquotedString(token) {
+					return nil, invalidValueError(fmt.Sprintf("unknown value: %q", token), p.scanner.Line, p.scanner.Column)
+				}
+			}
 			p.advance()
 			return String(token), nil
 		}
@@ -1143,6 +1178,12 @@ func (p *parser) extractSubstitution() (*Substitution, error) {
 	}
 
 	token := p.scanner.TokenText()
+	mode := p.scanner.Mode
+	if token == "-" {
+		// Plus signs in exponents are not valid in unquoted paths.
+		p.scanner.Mode &^= scanner.ScanFloats
+		defer func() { p.scanner.Mode = mode }()
+	}
 	if token == objectEndToken {
 		return nil, invalidSubstitutionError("path expression cannot be empty", p.scanner.Line, p.scanner.Column)
 	}
@@ -1177,6 +1218,7 @@ func (p *parser) extractSubstitution() (*Substitution, error) {
 
 			parenthesisBalanced = true
 
+			p.scanner.Mode = mode
 			p.advance()
 
 			break
@@ -1244,7 +1286,8 @@ func (p *parser) extractMultiLineString() (String, error) {
 }
 
 func (p *parser) isTokenConcatenable(currentText string, peeked rune) bool {
-	return !isComment(currentText, peeked) &&
+	return currentText != "" && // the empty token at the end of the input would otherwise pass as an unquoted string
+		!isComment(currentText, peeked) &&
 		(isSubstitution(currentText, peeked) ||
 			isUnquotedString(currentText) ||
 			(p.currentRune == scanner.String && !isMultiLineString(currentText, peeked)))
