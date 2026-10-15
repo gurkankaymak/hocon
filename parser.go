@@ -471,12 +471,12 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 		key := p.scanner.TokenText()
 		if !strings.HasPrefix(key, `"`) && key != dotToken {
 			mode := p.scanner.Mode
-			if key == "-" {
-				// Keep dots in minus-prefixed keys as path separators.
-				p.scanner.Mode &^= scanner.ScanFloats
-			}
 			// glue the tokens that immediately follow, as the scanner splits keys with numeric path segments like ".2g" into multiple tokens
 			for isAdjacentKeyRune(p.scanner.Peek()) {
+				if strings.HasSuffix(key, "-") {
+					// keep the dots after a minus as path separators, the scanner would otherwise read "2.3" of "1-2.3" as a float
+					p.scanner.Mode &^= scanner.ScanFloats
+				}
 				p.advance()
 				key += p.scanner.TokenText()
 			}
@@ -879,7 +879,8 @@ func (p *parser) extractArray() (Array, error) {
 			token = p.scanner.TokenText()
 		}
 
-		if p.scanner.Line == lastRow && token != commaToken && token != arrayEndToken {
+		// at the end of the input there is nothing left to concatenate, the array is reported as not closed below
+		if p.scanner.Line == lastRow && token != commaToken && token != arrayEndToken && p.currentRune != scanner.EOF {
 			concatenatedValue, err := p.checkConcatenation(value)
 			if err != nil {
 				return nil, err
@@ -1285,7 +1286,8 @@ func (p *parser) extractMultiLineString() (String, error) {
 }
 
 func (p *parser) isTokenConcatenable(currentText string, peeked rune) bool {
-	return !isComment(currentText, peeked) &&
+	return currentText != "" && // the empty token at the end of the input would otherwise pass as an unquoted string
+		!isComment(currentText, peeked) &&
 		(isSubstitution(currentText, peeked) ||
 			isUnquotedString(currentText) ||
 			(p.currentRune == scanner.String && !isMultiLineString(currentText, peeked)))

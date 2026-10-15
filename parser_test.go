@@ -126,6 +126,15 @@ func TestParseMinusPrefixedPathPlus(t *testing.T) {
 	}
 }
 
+func TestParseHyphenatedNumericDottedPaths(t *testing.T) {
+	config, err := ParseString("2024-01-15.total=5\n1-2.3=6\na.10-20.30=7\ncopy=${1-2.3}\nnested=${a.10-20.30}")
+	assertNoError(t, err)
+	assertDeepEqual(t, config, &Config{Object{
+		"2024-01-15": Object{"total": Int(5)}, "1-2": Object{"3": Int(6)}, "a": Object{"10-20": Object{"30": Int(7)}},
+		"copy": Int(6), "nested": Int(7),
+	}})
+}
+
 func TestParseString(t *testing.T) {
 	t.Run("parse the string and return a pointer to the Config", func(t *testing.T) {
 		got, err := ParseString("{a:1}")
@@ -1825,6 +1834,33 @@ func TestExtractArray(t *testing.T) {
 		parser := newParser(strings.NewReader("[1"))
 		parser.advance()
 		expectedError := invalidArrayError("parenthesis do not match", 1, 2)
+		got, err := parser.extractArray()
+		assertError(t, err, expectedError)
+		assertNil(t, got)
+	})
+
+	t.Run("return invalidArrayError if the closing parenthesis is missing after a whitespace", func(t *testing.T) {
+		parser := newParser(strings.NewReader("[1 "))
+		parser.advance()
+		expectedError := invalidArrayError("parenthesis do not match", 1, 4)
+		got, err := parser.extractArray()
+		assertError(t, err, expectedError)
+		assertNil(t, got)
+	})
+
+	t.Run("return invalidArrayError if the closing parenthesis is missing after a concatenation", func(t *testing.T) {
+		parser := newParser(strings.NewReader("[a b "))
+		parser.advance()
+		expectedError := invalidArrayError("parenthesis do not match", 1, 6)
+		got, err := parser.extractArray()
+		assertError(t, err, expectedError)
+		assertNil(t, got)
+	})
+
+	t.Run("return invalidArrayError if the closing parenthesis is missing after a negative number", func(t *testing.T) {
+		parser := newParser(strings.NewReader("[-1"))
+		parser.advance()
+		expectedError := invalidArrayError("parenthesis do not match", 1, 4)
 		got, err := parser.extractArray()
 		assertError(t, err, expectedError)
 		assertNil(t, got)
