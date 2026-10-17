@@ -1250,6 +1250,36 @@ func TestComments(t *testing.T) {
 		assertDeepEqual(t, got, &Config{Object{"a": Array{Int(1), Int(2)}}})
 	})
 
+	t.Run("parse the comment after a concatenated value inside an array", func(t *testing.T) {
+		got, err := ParseString("a = [a b // comment\n]\nb = [1 2 # comment\n, c]")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": Array{String("a b")}, "b": Array{String("1 2"), String("c")}}})
+	})
+
+	t.Run("parse the consecutive comments inside an array", func(t *testing.T) {
+		got, err := ParseString("a = [1, // comment\n# another comment\n2 // comment\n# another comment\n]\nb = [a b // comment\n// another comment\n]")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": Array{Int(1), Int(2)}, "b": Array{String("a b")}}})
+	})
+
+	t.Run("parse the comment at the beginning of an array", func(t *testing.T) {
+		got, err := ParseString("a = [ // comment\na b\n]")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": Array{String("a b")}}})
+	})
+
+	t.Run("parse the consecutive comments before a value", func(t *testing.T) {
+		got, err := ParseString("a: # comment\n# another comment\n1")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": Int(1)}})
+	})
+
+	t.Run("parse the concatenated value after a comment", func(t *testing.T) {
+		got, err := ParseString("a: # comment\nb c\nd = 1")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": String("b c"), "d": Int(1)}})
+	})
+
 	t.Run("parse the '//' comment before the closing parenthesis of an object", func(t *testing.T) {
 		got, err := ParseString("a { b = 1\n// comment\n}")
 		assertNoError(t, err)
@@ -1811,6 +1841,23 @@ func TestExtractArray(t *testing.T) {
 		got, err := parser.extractArray()
 		assertNoError(t, err)
 		assertEquals(t, len(got), 0)
+	})
+
+	t.Run("extract the empty array if it contains only a comment", func(t *testing.T) {
+		parser := newParser(strings.NewReader("[ // comment\n]"))
+		parser.advance()
+		got, err := parser.extractArray()
+		assertNoError(t, err)
+		assertEquals(t, len(got), 0)
+	})
+
+	t.Run("return leadingCommaError if the array starts with a comma after a comment", func(t *testing.T) {
+		parser := newParser(strings.NewReader("[ // comment\n,1]"))
+		parser.advance()
+		expectedError := leadingCommaError(2, 1)
+		got, err := parser.extractArray()
+		assertError(t, err, expectedError)
+		assertNil(t, got)
 	})
 
 	t.Run("return the error if any error occurs in extractValue method", func(t *testing.T) {

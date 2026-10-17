@@ -543,6 +543,7 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 		switch text {
 		case equalsToken, colonToken:
 			p.advance()
+			p.consumeComments() // the value starts after the comments, its concatenation is checked on that line
 			lastRow = p.scanner.Line
 
 			value, err := p.extractValue()
@@ -599,9 +600,7 @@ func (p *parser) extractObject(isSubObject ...bool) (Object, error) {
 			return object, nil
 		}
 
-		for isComment(p.scanner.TokenText(), p.scanner.Peek()) {
-			p.consumeComment()
-		}
+		p.consumeComments()
 
 		if p.scanner.Line == lastRow &&
 			p.scanner.TokenText() != commaToken &&
@@ -849,6 +848,7 @@ func (p *parser) extractArray() (Array, error) {
 	}
 
 	p.advance()
+	p.consumeComments()
 
 	token := p.scanner.TokenText()
 	if token == commaToken {
@@ -873,11 +873,8 @@ func (p *parser) extractArray() (Array, error) {
 			return nil, err
 		}
 
+		p.consumeComments()
 		token = p.scanner.TokenText()
-		if isComment(token, p.scanner.Peek()) {
-			p.consumeComment()
-			token = p.scanner.TokenText()
-		}
 
 		// at the end of the input there is nothing left to concatenate, the array is reported as not closed below
 		if p.scanner.Line == lastRow && token != commaToken && token != arrayEndToken && p.currentRune != scanner.EOF {
@@ -908,15 +905,15 @@ func (p *parser) extractArray() (Array, error) {
 			array = append(array, value)
 		}
 
+		// a comment can also end a concatenated value
+		p.consumeComments()
+		token = p.scanner.TokenText()
+
 		if p.scanner.TokenText() == commaToken {
 			p.advance() // skip comma
 
+			p.consumeComments()
 			token = p.scanner.TokenText()
-
-			if isComment(token, p.scanner.Peek()) {
-				p.consumeComment()
-				token = p.scanner.TokenText()
-			}
 
 			if token == commaToken {
 				return nil, adjacentCommasError(p.scanner.Line, p.scanner.Column)
@@ -940,11 +937,8 @@ func (p *parser) extractArray() (Array, error) {
 }
 
 func (p *parser) extractValue() (Value, error) {
+	p.consumeComments()
 	token := p.scanner.TokenText()
-	if isComment(token, p.scanner.Peek()) {
-		p.consumeComment()
-		token = p.scanner.TokenText()
-	}
 	if token == "-" && p.scanner.Peek() >= '0' && p.scanner.Peek() <= '9' {
 		p.advance()
 		token += p.scanner.TokenText()
@@ -1243,6 +1237,13 @@ func (p *parser) consumeComment() {
 		p.advance()
 	}
 	p.advance()
+}
+
+// consumeComments skips the consecutive comments, as each comment ends at the end of its line
+func (p *parser) consumeComments() {
+	for isComment(p.scanner.TokenText(), p.scanner.Peek()) {
+		p.consumeComment()
+	}
 }
 
 // unquote decodes the quoted string token by the JSON string rules, as the HOCON spec defines quoted strings
