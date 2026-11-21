@@ -210,6 +210,12 @@ func resolveAcyclicSubstitutions(root Object, visitedPaths map[string]bool, valu
 }
 
 func processSubstitution(root Object, value Value, visitedPaths map[string]bool, resolveFunc func(value Value)) error {
+	if value == nil {
+		// an optional substitution that was already resolved to "undefined" while resolving
+		// another reference to the same array, object or concatenation
+		return nil
+	}
+
 	if valueType := value.Type(); valueType == SubstitutionType {
 		processed, err := processSubstitutionType(root, value.(*Substitution), visitedPaths)
 		if err != nil {

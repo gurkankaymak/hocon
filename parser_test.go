@@ -1185,6 +1185,18 @@ func TestOmitUnresolvedOptionalSubstitutions(t *testing.T) {
 		assertDeepEqual(t, got, &Config{Object{}})
 	})
 
+	t.Run("resolve a reference to an array that contains an unresolved optional substitution", func(t *testing.T) {
+		got, err := ParseString("b = [1, ${?nonExisting}]\nx = ${b}\ny = [${b}]")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"b": Array{Int(1)}, "x": Array{Int(1)}, "y": Array{Array{Int(1)}}}})
+	})
+
+	t.Run("resolve a reference to an object that contains an unresolved optional substitution", func(t *testing.T) {
+		got, err := ParseString("b = { c = ${?nonExisting}, d = 1 }\nx = ${b}")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"b": Object{"d": Int(1)}, "x": Object{"d": Int(1)}}})
+	})
+
 	t.Run("return an error if a required substitution path traverses through a non-object value", func(t *testing.T) {
 		got, err := ParseString("x = 1\na = ${x.y}")
 		assertError(t, err, errors.New("could not resolve substitution: ${x.y} to a value"))
