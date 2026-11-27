@@ -260,10 +260,11 @@ func processSubstitutionType(root Object, substitution *Substitution, visitedPat
 
 		delete(visitedPaths, substitution.path)
 
-		if foundValue != nil {
+		if !isUndefined(foundValue) {
 			return foundValue, nil
 		}
-		// the found value is itself an unresolved optional substitution, treat the path as undefined and fall through
+		// the found value is itself an unresolved optional substitution, or a concatenation of only such
+		// substitutions, treat the path as undefined and fall through
 	}
 
 	if env, ok := os.LookupEnv(substitution.path); ok {
@@ -275,6 +276,26 @@ func processSubstitutionType(root Object, substitution *Substitution, visitedPat
 	}
 
 	return nil, nil
+}
+
+// isUndefined reports whether normalize removes the given resolved value: an unresolved optional
+// substitution (nil) or a concatenation made only of such values and empty strings, e.g. the value
+// of b in "b = ${?x}${?y}" or in "b = ${?x}\nb = ${?y}" when neither x nor y is defined
+func isUndefined(value Value) bool {
+	switch v := value.(type) {
+	case nil:
+		return true
+	case concatenation:
+		for _, element := range v {
+			if element != String("") && !isUndefined(element) {
+				return false
+			}
+		}
+
+		return true
+	default:
+		return false
+	}
 }
 
 // normalize removes the values of the unresolved optional substitutions

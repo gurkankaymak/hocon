@@ -1197,6 +1197,37 @@ func TestOmitUnresolvedOptionalSubstitutions(t *testing.T) {
 		assertDeepEqual(t, got, &Config{Object{"b": Object{"d": Int(1)}, "x": Object{"d": Int(1)}}})
 	})
 
+	t.Run("resolve a reference to a concatenation that contains an unresolved optional substitution", func(t *testing.T) {
+		got, err := ParseString("b = [1] ${?nonExisting}\nx = ${b}")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"b": Array{Int(1)}, "x": Array{Int(1)}}})
+	})
+
+	t.Run("return an error if a required substitution path refers to a concatenation of unresolved optional substitutions", func(t *testing.T) {
+		got, err := ParseString("b = ${?nonExisting1}${?nonExisting2}\na = ${b}")
+		assertError(t, err, errors.New("could not resolve substitution: ${b} to a value"))
+		assertNil(t, got)
+	})
+
+	t.Run("return an error if a required substitution path refers to a field overridden with another unresolved optional substitution", func(t *testing.T) {
+		got, err := ParseString("b = ${?nonExisting1}\nb = ${?nonExisting2}\na = ${b}")
+		assertError(t, err, errors.New("could not resolve substitution: ${b} to a value"))
+		assertNil(t, got)
+	})
+
+	t.Run("keep the previous value if the optional substitution path refers to a concatenation of unresolved optional substitutions", func(t *testing.T) {
+		got, err := ParseString("a = 1\na = ${?b}\nb = ${?nonExisting1}${?nonExisting2}")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": Int(1)}})
+	})
+
+	t.Run("resolve to the environment variable if the substitution path refers to a concatenation of unresolved optional substitutions", func(t *testing.T) {
+		t.Setenv("TEST_ENV", "test")
+		got, err := ParseString("TEST_ENV = ${?nonExisting1}${?nonExisting2}\na = ${TEST_ENV}")
+		assertNoError(t, err)
+		assertDeepEqual(t, got, &Config{Object{"a": String("test")}})
+	})
+
 	t.Run("return an error if a required substitution path traverses through a non-object value", func(t *testing.T) {
 		got, err := ParseString("x = 1\na = ${x.y}")
 		assertError(t, err, errors.New("could not resolve substitution: ${x.y} to a value"))
